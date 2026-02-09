@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OpenSoundBoard Remote</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #1a202c;
+      color: white;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      padding: 1rem;
+    }
+    .cell {
+      aspect-ratio: 1 / 1;
+      background-color: #2d3748;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+  <script>
+    const ws = new WebSocket(`ws://${window.location.host}`);
+    const grid = document.getElementById('grid');
+
+    ws.onopen = () => {
+      console.log('Connected to WebSocket server');
+      fetch('/sounds')
+        .then(res => res.json())
+        .then(sounds => {
+          renderGrid(sounds);
+        });
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'sounds-updated') {
+        renderGrid(data.sounds);
+      }
+    };
+
+    function renderGrid(sounds) {
+      grid.innerHTML = '';
+      for (let i = 0; i < 9; i++) {
+        const sound = sounds[0]?.[i];
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.textContent = sound ? sound.name : i + 1;
+        if (sound) {
+          cell.onclick = () => {
+            ws.send(JSON.stringify({ type: 'play-sound', soundId: sound.id }));
+          };
+        }
+        grid.appendChild(cell);
+      }
+    }
+  </script>
+</body>
+</html>
