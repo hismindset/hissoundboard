@@ -6,13 +6,15 @@ const NUM_PAGES = 10;
 const PageNav: React.FC = () => {
     const currentPage = useSoundboardStore((s) => s.currentPage);
     const setCurrentPage = useSoundboardStore((s) => s.setCurrentPage);
-    const sounds = useSoundboardStore((s) => s.sounds);
+    const grid = useSoundboardStore((s) => s.grid);
 
     // Check which pages have sounds
     const pagesWithSounds = new Set<number>();
-    for (const key of Object.keys(sounds)) {
-        const page = parseInt(key.split('-')[0]);
-        pagesWithSounds.add(page);
+    for (const [key, value] of Object.entries(grid)) {
+        if (value) {
+            const page = parseInt(key.split('-')[0]);
+            pagesWithSounds.add(page);
+        }
     }
 
     return (

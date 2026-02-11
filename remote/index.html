@@ -378,7 +378,7 @@
                 if (soundEntry) {
                     const name = document.createElement('div');
                     name.className = 'cell-name';
-                    name.textContent = soundEntry.sound.name;
+                    name.textContent = soundEntry.sound.displayName || soundEntry.sound.name || 'Unnamed';
                     cell.appendChild(name);
 
                     const mode = document.createElement('div');

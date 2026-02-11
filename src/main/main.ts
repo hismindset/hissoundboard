@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, dialog, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, net } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
@@ -7,6 +7,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import os from 'os';
 import https from 'https';
 import httpModule from 'http';
+import { uIOhook, UiohookKey } from 'uiohook-napi';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -46,7 +47,7 @@ const ensureSoundsDir = () => {
 
 const createWindow = () => {
     mainWindow = new BrowserWindow({
-        width: 960,
+        width: 1100,
         height: 720,
         minWidth: 700,
         minHeight: 550,
@@ -81,7 +82,6 @@ const appServer = express();
 const server = http.createServer(appServer);
 const wss = new WebSocketServer({ server });
 
-// Serve remote control page
 const getRemotePath = () => {
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         return path.join(__dirname, '../../remote');
@@ -91,7 +91,6 @@ const getRemotePath = () => {
 
 appServer.use(express.static(getRemotePath()));
 
-// Broadcast to all connected WebSocket clients
 const broadcast = (data: object) => {
     const message = JSON.stringify(data);
     wss.clients.forEach((client) => {
@@ -102,14 +101,12 @@ const broadcast = (data: object) => {
 };
 
 wss.on('connection', (ws: WebSocket) => {
-    // Send current state to newly connected client
     mainWindow?.webContents.send('request-sounds-for-remote');
 
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message.toString());
             if (data.type === 'play-sound') {
-                // Panic from remote: page=-1, slot=-1
                 if (data.page === -1 && data.slot === -1) {
                     mainWindow?.webContents.send('panic-stop');
                 } else {
@@ -127,7 +124,6 @@ wss.on('connection', (ws: WebSocket) => {
     });
 });
 
-// REST endpoint for sounds
 appServer.get('/api/sounds', (_req, res) => {
     mainWindow?.webContents.send('request-sounds-for-remote');
     ipcMain.once('sounds-for-remote', (_event, sounds) => {
@@ -140,40 +136,170 @@ appServer.get('/api/sounds', (_req, res) => {
 const getLocalIp = (): string => {
     const nets = os.networkInterfaces();
     for (const name of Object.keys(nets)) {
-        for (const net of nets[name]!) {
-            if (net.family === 'IPv4' && !net.internal) {
-                return net.address;
+        for (const netIf of nets[name]!) {
+            if (netIf.family === 'IPv4' && !netIf.internal) {
+                return netIf.address;
             }
         }
     }
     return '127.0.0.1';
 };
 
+// ─── uiohook-napi: Global Keyboard Hooks ──────────────────────────────────────
+
+// Key code maps for uiohook-napi
+const NUMPAD_KEY_MAP: Record<number, number> = {
+    [UiohookKey.Numpad1]: 1,
+    [UiohookKey.Numpad2]: 2,
+    [UiohookKey.Numpad3]: 3,
+    [UiohookKey.Numpad4]: 4,
+    [UiohookKey.Numpad5]: 5,
+    [UiohookKey.Numpad6]: 6,
+    [UiohookKey.Numpad7]: 7,
+    [UiohookKey.Numpad8]: 8,
+    [UiohookKey.Numpad9]: 9,
+};
+
+const STANDARD_KEY_MAP: Record<number, number> = {
+    [UiohookKey['1']]: 1,
+    [UiohookKey['2']]: 2,
+    [UiohookKey['3']]: 3,
+    [UiohookKey['4']]: 4,
+    [UiohookKey['5']]: 5,
+    [UiohookKey['6']]: 6,
+    [UiohookKey['7']]: 7,
+    [UiohookKey['8']]: 8,
+    [UiohookKey['9']]: 9,
+};
+
+// Current shortcut configuration
+let shortcutConfig = {
+    mode: 'numpad' as 'numpad' | 'standard',
+    pageModifiers: {
+        0: 'Ctrl',
+        1: 'Alt',
+        2: 'Shift',
+        3: 'Ctrl+Alt',
+        4: 'Ctrl+Shift',
+    } as Record<number, string>,
+};
+
+// Track currently pressed keycodes to distinguish left/right modifiers
+const pressedKeys = new Set<number>();
+
+/**
+ * Build possible modifier strings for the current key state.
+ * Returns multiple candidates so e.g. RCtrl is tried alongside Ctrl.
+ */
+function getModifierCandidates(
+    ctrlKey: boolean,
+    altKey: boolean,
+    shiftKey: boolean,
+    metaKey: boolean
+): string[] {
+    const candidates: string[] = [];
+    const isRCtrl = pressedKeys.has(UiohookKey.CtrlRight);
+
+    const parts: string[] = [];
+    if (ctrlKey) parts.push('Ctrl');
+    if (altKey) parts.push('Alt');
+    if (shiftKey) parts.push('Shift');
+    if (metaKey) parts.push('Meta');
+
+    if (parts.length === 0) return [];
+    candidates.push(parts.join('+'));
+
+    // If right ctrl is pressed, also try RCtrl variant
+    if (ctrlKey && isRCtrl) {
+        const rParts = parts.map((p) => (p === 'Ctrl' ? 'RCtrl' : p));
+        candidates.push(rParts.join('+'));
+    }
+
+    return candidates;
+}
+
+/**
+ * Find which page matches any of the given modifier strings
+ */
+function getPageForModifiers(modifiers: string[]): number | null {
+    for (const [pageStr, mod] of Object.entries(shortcutConfig.pageModifiers)) {
+        if (modifiers.includes(mod)) {
+            return parseInt(pageStr);
+        }
+    }
+    return null;
+}
+
+const setupGlobalHooks = () => {
+    uIOhook.on('keydown', (e) => {
+        pressedKeys.add(e.keycode);
+
+        // Handle Escape = Panic Stop (no modifiers needed)
+        if (e.keycode === UiohookKey.Escape) {
+            mainWindow?.webContents.send('panic-stop');
+            return;
+        }
+
+        // Determine which key map to use
+        const keyMap = shortcutConfig.mode === 'numpad' ? NUMPAD_KEY_MAP : STANDARD_KEY_MAP;
+        const number = keyMap[e.keycode];
+        if (!number) return;
+
+        // Check modifiers
+        const modifiers = getModifierCandidates(
+            e.ctrlKey || false,
+            e.altKey || false,
+            e.shiftKey || false,
+            e.metaKey || false
+        );
+
+        if (modifiers.length === 0) return;
+
+        const page = getPageForModifiers(modifiers);
+        if (page === null) return;
+
+        // Convert numpad number to grid slot index
+        // Numpad layout: 7=0, 8=1, 9=2, 4=3, 5=4, 6=5, 1=6, 2=7, 3=8
+        const NUMPAD_TO_SLOT: Record<number, number> = {
+            7: 0, 8: 1, 9: 2,
+            4: 3, 5: 4, 6: 5,
+            1: 6, 2: 7, 3: 8,
+        };
+        const slot = NUMPAD_TO_SLOT[number];
+        if (slot === undefined) return;
+
+        mainWindow?.webContents.send('trigger-sound', { page, slot });
+    });
+
+    uIOhook.on('keyup', (e) => {
+        pressedKeys.delete(e.keycode);
+    });
+
+    uIOhook.start();
+};
+
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
 
 const setupIpcHandlers = () => {
-    // Register the sound:// protocol handler to serve audio files
+    // Register the sound:// protocol handler
     protocol.handle('sound', (request) => {
         const reqUrl = new URL(request.url);
         const filePath = decodeURIComponent(reqUrl.pathname.replace(/^\/+/, ''));
-        // Serve from the sounds directory
         const fullPath = path.join(soundsDir, filePath);
         const fileUrl = `file://${fullPath}`;
         console.log(`[sound://] Serving: ${request.url} -> ${fileUrl}`);
         return net.fetch(fileUrl);
     });
 
-    // Save dropped sound file to app data directory
+    // Save dropped sound file
     ipcMain.handle(
         'save-sound-file',
         async (_event, sourcePath: string, fileName: string) => {
             ensureSoundsDir();
             const destPath = path.join(soundsDir, fileName);
-            // Only copy if not already in sounds directory
             if (path.dirname(sourcePath) !== soundsDir) {
                 fs.copyFileSync(sourcePath, destPath);
             }
-            // Return a sound:// URL that the renderer can load
             return `sound://play/${encodeURIComponent(fileName)}`;
         }
     );
@@ -194,7 +320,6 @@ const setupIpcHandlers = () => {
             const httpProto = url.startsWith('https') ? https : httpModule;
 
             const request = httpProto.get(url, (response) => {
-                // Follow redirects
                 if (
                     response.statusCode &&
                     response.statusCode >= 300 &&
@@ -205,7 +330,7 @@ const setupIpcHandlers = () => {
                         redirectResponse.pipe(file);
                         file.on('finish', () => {
                             file.close();
-                            resolve(`sound://${encodeURIComponent(fileName)}`);
+                            resolve(`sound://play/${encodeURIComponent(fileName)}`);
                         });
                     });
                     return;
@@ -213,12 +338,12 @@ const setupIpcHandlers = () => {
                 response.pipe(file);
                 file.on('finish', () => {
                     file.close();
-                    resolve(`sound://${encodeURIComponent(fileName)}`);
+                    resolve(`sound://play/${encodeURIComponent(fileName)}`);
                 });
             });
 
             request.on('error', (err) => {
-                fs.unlink(destPath, () => { }); // cleanup
+                fs.unlink(destPath, () => { });
                 reject(err.message);
             });
         });
@@ -234,34 +359,15 @@ const setupIpcHandlers = () => {
         ensureSoundsDir();
         return soundsDir;
     });
-};
 
-// ─── Global Shortcuts ────────────────────────────────────────────────────────
-
-const registerShortcuts = () => {
-    // Panic button: Escape stops all sounds
-    globalShortcut.register('Escape', () => {
-        mainWindow?.webContents.send('panic-stop');
+    // Receive shortcut configuration from renderer
+    ipcMain.on('set-shortcut-config', (_event, config) => {
+        shortcutConfig = {
+            mode: config.mode || 'numpad',
+            pageModifiers: config.pageModifiers || shortcutConfig.pageModifiers,
+        };
+        console.log('[Shortcuts] Config updated:', shortcutConfig);
     });
-
-    // Numpad shortcuts: Ctrl+Num1-9 = Page 1, Alt+Num1-9 = Page 2
-    for (let i = 1; i <= 9; i++) {
-        try {
-            globalShortcut.register(`CommandOrControl+num${i}`, () => {
-                mainWindow?.webContents.send('trigger-sound', { page: 0, slot: i - 1 });
-            });
-        } catch (e) {
-            /* Numpad keys may not be available on all keyboards */
-        }
-
-        try {
-            globalShortcut.register(`Alt+num${i}`, () => {
-                mainWindow?.webContents.send('trigger-sound', { page: 1, slot: i - 1 });
-            });
-        } catch (e) {
-            /* Numpad keys may not be available on all keyboards */
-        }
-    }
 };
 
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
@@ -270,7 +376,7 @@ app.on('ready', () => {
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
-    registerShortcuts();
+    setupGlobalHooks();
 
     server.listen(SERVER_PORT, () => {
         console.log(`Remote control server running on http://${getLocalIp()}:${SERVER_PORT}`);
@@ -278,7 +384,7 @@ app.on('ready', () => {
 });
 
 app.on('window-all-closed', () => {
-    globalShortcut.unregisterAll();
+    uIOhook.stop();
     server.close();
     if (process.platform !== 'darwin') {
         app.quit();
@@ -292,5 +398,5 @@ app.on('activate', () => {
 });
 
 app.on('will-quit', () => {
-    globalShortcut.unregisterAll();
+    uIOhook.stop();
 });

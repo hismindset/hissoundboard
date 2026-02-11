@@ -5,6 +5,11 @@ export interface TriggerSoundPayload {
     slot: number;
 }
 
+export interface ShortcutConfig {
+    mode: 'numpad' | 'standard';
+    pageModifiers: Record<number, string>;
+}
+
 const api = {
     // ─── Main → Renderer Events ──────────────────────────────────────────────
 
@@ -50,6 +55,13 @@ const api = {
 
     /** Get the path to the sounds directory */
     getSoundsDir: (): Promise<string> => ipcRenderer.invoke('get-sounds-dir'),
+
+    // ─── Shortcut Config ─────────────────────────────────────────────────────
+
+    /** Send shortcut configuration to main process */
+    setShortcutConfig: (config: ShortcutConfig) => {
+        ipcRenderer.send('set-shortcut-config', config);
+    },
 
     // ─── Renderer → Main Sends ───────────────────────────────────────────────
 

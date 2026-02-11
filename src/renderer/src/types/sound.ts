@@ -1,21 +1,25 @@
 export type PlaybackMode = 'one-shot' | 'loop';
 
 export interface Sound {
-    /** Unique ID like "page-slot", e.g. "0-3" */
+    /** Unique UUID */
     id: string;
-    /** Display name (derived from filename) */
-    name: string;
-    /** Absolute path to the audio file */
+    /** Original filename as imported */
+    originalName: string;
+    /** User-editable display name */
+    displayName: string;
+    /** Absolute path or sound:// URL to the audio file */
     filePath: string;
+    /** Gain value 0.0 – 2.0 */
+    volume: number;
+    /** Non-destructive trim start in seconds */
+    trimStart: number;
+    /** Non-destructive trim end in seconds (0 = end of file) */
+    trimEnd: number;
     /** Playback mode */
     playbackMode: PlaybackMode;
+    /** ISO timestamp */
+    createdAt: number;
 }
 
-export interface SoundSlot {
-    /** Page index (0-based) */
-    page: number;
-    /** Slot index within the page (0-8 for 3x3 grid) */
-    slot: number;
-    /** The sound assigned to this slot, or null if empty */
-    sound: Sound | null;
-}
+/** Grid only stores a reference to a Sound ID (or null if empty) */
+export type GridSlot = string | null;

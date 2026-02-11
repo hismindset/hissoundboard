@@ -6,7 +6,11 @@ import { useSoundboardStore } from '../lib/store';
 // Grid goes top-left to bottom-right, numpad goes bottom-left to top-right
 const NUMPAD_LAYOUT = [7, 8, 9, 4, 5, 6, 1, 2, 3];
 
-const Grid: React.FC = () => {
+interface GridProps {
+    onEditSound: (soundId: string) => void;
+}
+
+const Grid: React.FC<GridProps> = ({ onEditSound }) => {
     const currentPage = useSoundboardStore((s) => s.currentPage);
 
     return (
@@ -17,6 +21,7 @@ const Grid: React.FC = () => {
                     page={currentPage}
                     slot={gridIndex}
                     numpadLabel={numpadNum}
+                    onEditSound={onEditSound}
                 />
             ))}
         </div>

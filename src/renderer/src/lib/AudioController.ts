@@ -1,13 +1,17 @@
 import type { Sound } from '../types/sound';
 
 /**
- * AudioController handles dual-output audio playback.
- * Each sound is played on both monitor (local speakers) and output (virtual cable) devices
+ * AudioController handles dual-output audio playback with per-sound
+ * volume (gain) and non-destructive trimming.
+ *
+ * Each sound plays on both monitor (local speakers) and output (virtual cable)
  * simultaneously using HTMLAudioElement + setSinkId().
  */
 class AudioController {
-    /** Map of soundId → active HTMLAudioElement[] (for stopping) */
+    /** Map of soundId → active HTMLAudioElement[] */
     private activeSounds: Map<string, HTMLAudioElement[]> = new Map();
+    /** Map of element → timeupdate handler for trim enforcement */
+    private trimHandlers: Map<HTMLAudioElement, () => void> = new Map();
 
     /**
      * Play a sound on both monitor and output devices.
@@ -32,13 +36,19 @@ class AudioController {
 
         const elements: HTMLAudioElement[] = [];
 
-        // Create audio element for monitor device
+        // Create audio elements for both outputs
         const monitorAudio = new Audio(sound.filePath);
-        elements.push(monitorAudio);
-
-        // Create audio element for output device
         const outputAudio = new Audio(sound.filePath);
-        elements.push(outputAudio);
+        elements.push(monitorAudio, outputAudio);
+
+        // Apply volume (gain 0.0 – 2.0)
+        const vol = Math.max(0, Math.min(2, sound.volume ?? 1.0));
+        monitorAudio.volume = Math.min(1, vol); // HTMLAudioElement caps at 1
+        outputAudio.volume = Math.min(1, vol);
+
+        // For volume > 1.0, use Web Audio API gain node if possible
+        // Otherwise cap at 1.0 (HTMLAudioElement limit)
+        // We could use AudioContext for > 1.0 gain but keeping it simple for now
 
         // Set sink IDs (audio output devices)
         try {
@@ -52,17 +62,44 @@ class AudioController {
             console.warn('Failed to set audio output device:', err);
         }
 
+        // Apply trim start
+        if (sound.trimStart > 0) {
+            monitorAudio.currentTime = sound.trimStart;
+            outputAudio.currentTime = sound.trimStart;
+        }
+
         // Configure loop mode
         if (sound.playbackMode === 'loop') {
             monitorAudio.loop = true;
             outputAudio.loop = true;
         }
 
+        // Set up trim end enforcement via timeupdate
+        if (sound.trimEnd > 0) {
+            const createTrimHandler = (el: HTMLAudioElement) => {
+                const handler = () => {
+                    if (el.currentTime >= sound.trimEnd) {
+                        if (sound.playbackMode === 'loop') {
+                            // Loop back to trim start
+                            el.currentTime = sound.trimStart || 0;
+                        } else {
+                            // One-shot: pause at trim end
+                            el.pause();
+                            el.dispatchEvent(new Event('ended'));
+                        }
+                    }
+                };
+                el.addEventListener('timeupdate', handler);
+                this.trimHandlers.set(el, handler);
+            };
+            createTrimHandler(monitorAudio);
+            createTrimHandler(outputAudio);
+        }
+
         // Track active sounds
         if (sound.playbackMode === 'loop') {
             this.activeSounds.set(sound.id, elements);
         } else {
-            // One-shot: track for panic stop, clean up on end
             const existing = this.activeSounds.get(sound.id) || [];
             this.activeSounds.set(sound.id, [...existing, ...elements]);
         }
@@ -73,7 +110,6 @@ class AudioController {
             const onEnded = () => {
                 endedCount++;
                 if (endedCount >= 2) {
-                    // Both audio elements finished
                     const current = this.activeSounds.get(sound.id) || [];
                     const remaining = current.filter(
                         (el) => el !== monitorAudio && el !== outputAudio
@@ -83,6 +119,9 @@ class AudioController {
                     } else {
                         this.activeSounds.set(sound.id, remaining);
                     }
+                    // Clean up trim handlers
+                    this.cleanupTrimHandler(monitorAudio);
+                    this.cleanupTrimHandler(outputAudio);
                     callbacks.onEnd?.();
                 }
             };
@@ -109,9 +148,10 @@ class AudioController {
         const elements = this.activeSounds.get(soundId);
         if (elements) {
             elements.forEach((el) => {
+                this.cleanupTrimHandler(el);
                 el.pause();
                 el.currentTime = 0;
-                el.src = ''; // Release resource
+                el.src = '';
             });
             this.activeSounds.delete(soundId);
         }
@@ -121,6 +161,7 @@ class AudioController {
     stopAll(): void {
         this.activeSounds.forEach((elements) => {
             elements.forEach((el) => {
+                this.cleanupTrimHandler(el);
                 el.pause();
                 el.currentTime = 0;
                 el.src = '';
@@ -132,6 +173,15 @@ class AudioController {
     /** Check if a sound is currently playing */
     isPlaying(soundId: string): boolean {
         return this.activeSounds.has(soundId);
+    }
+
+    /** Clean up a trim handler for an element */
+    private cleanupTrimHandler(el: HTMLAudioElement): void {
+        const handler = this.trimHandlers.get(el);
+        if (handler) {
+            el.removeEventListener('timeupdate', handler);
+            this.trimHandlers.delete(el);
+        }
     }
 }
 

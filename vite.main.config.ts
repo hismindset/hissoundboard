@@ -16,7 +16,7 @@ export default defineConfig((env) => {
                 formats: ['cjs'],
             },
             rollupOptions: {
-                external: [...external, 'bufferutil', 'utf-8-validate'],
+                external: [...external, 'bufferutil', 'utf-8-validate', 'uiohook-napi'],
             },
         },
         plugins: [pluginHotRestart('restart')],

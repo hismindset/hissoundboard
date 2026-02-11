@@ -1,15 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import type { Sound } from '../types/sound';
+import { formatSoundName, generateId } from '../lib/utils';
 
 const Settings: React.FC = () => {
     const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
     const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
     const setMonitorDevice = useSoundboardStore((s) => s.setMonitorDevice);
     const setOutputDevice = useSoundboardStore((s) => s.setOutputDevice);
-    const addSound = useSoundboardStore((s) => s.addSound);
-    const sounds = useSoundboardStore((s) => s.sounds);
+    const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
+    const assignToSlot = useSoundboardStore((s) => s.assignToSlot);
+    const grid = useSoundboardStore((s) => s.grid);
     const currentPage = useSoundboardStore((s) => s.currentPage);
+    const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
+    const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
+    const pageModifiers = useSoundboardStore((s) => s.pageModifiers);
+    const setPageModifier = useSoundboardStore((s) => s.setPageModifier);
 
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -35,7 +41,6 @@ const Settings: React.FC = () => {
         window.api.getLocalIp().then(({ ip, port }) => {
             const url = `http://${ip}:${port}`;
             setServerUrl(url);
-            // Generate QR code as SVG using a simple approach
             setQrCodeUrl(
                 `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}&bgcolor=0d0e1f&color=a78bfa`
             );
@@ -52,7 +57,7 @@ const Settings: React.FC = () => {
             // Find the next free slot on the current page
             let freeSlot = -1;
             for (let i = 0; i < 9; i++) {
-                if (!sounds[`${currentPage}-${i}`]) {
+                if (!grid[`${currentPage}-${i}`]) {
                     freeSlot = i;
                     break;
                 }
@@ -69,15 +74,22 @@ const Settings: React.FC = () => {
             const urlObj = new URL(downloadUrl.trim());
             const pathParts = urlObj.pathname.split('/');
             const rawName = pathParts[pathParts.length - 1] || `Sound ${freeSlot + 1}`;
-            const displayName = decodeURIComponent(rawName).replace(/\.mp3$/i, '');
+            const displayName = formatSoundName(decodeURIComponent(rawName));
 
+            const id = generateId();
             const newSound: Sound = {
-                id: `${currentPage}-${freeSlot}`,
-                name: displayName,
+                id,
+                originalName: rawName,
+                displayName,
                 filePath: soundUrl,
+                volume: 1.0,
+                trimStart: 0,
+                trimEnd: 0,
                 playbackMode: 'one-shot',
+                createdAt: Date.now(),
             };
-            addSound(currentPage, freeSlot, newSound);
+            addToLibrary(newSound);
+            assignToSlot(currentPage, freeSlot, id);
 
             setDownloadStatus('success');
             setDownloadMessage(`→ Slot ${freeSlot + 1}`);
@@ -89,7 +101,19 @@ const Settings: React.FC = () => {
             setDownloadMessage('Download fehlgeschlagen');
             setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
         }
-    }, [downloadUrl, sounds, currentPage, addSound]);
+    }, [downloadUrl, grid, currentPage, addToLibrary, assignToSlot]);
+
+    const sendShortcutConfig = useCallback(() => {
+        window.api.setShortcutConfig?.({
+            mode: shortcutMode,
+            pageModifiers,
+        });
+    }, [shortcutMode, pageModifiers]);
+
+    // Sync shortcut config to main process when it changes
+    useEffect(() => {
+        sendShortcutConfig();
+    }, [sendShortcutConfig]);
 
     return (
         <div className="w-full max-w-md space-y-6 animate-fade-in">
@@ -141,6 +165,100 @@ const Settings: React.FC = () => {
                             </option>
                         ))}
                     </select>
+                </div>
+            </div>
+
+            {/* Keyboard Shortcuts */}
+            <div className="space-y-4">
+                <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
+                    Shortcuts
+                </h3>
+
+                {/* Mode Toggle */}
+                <div>
+                    <label className="block text-xs text-surface-300 mb-2">
+                        Key Mode
+                    </label>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setShortcutMode('numpad')}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${shortcutMode === 'numpad'
+                                ? 'bg-accent/20 text-accent-light border border-accent/30'
+                                : 'bg-surface-800 text-surface-400 border border-surface-600/30 hover:text-surface-200'
+                                }`}
+                        >
+                            ⌨ Numpad
+                        </button>
+                        <button
+                            onClick={() => setShortcutMode('standard')}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${shortcutMode === 'standard'
+                                ? 'bg-accent/20 text-accent-light border border-accent/30'
+                                : 'bg-surface-800 text-surface-400 border border-surface-600/30 hover:text-surface-200'
+                                }`}
+                        >
+                            🔢 Standard (1-9)
+                        </button>
+                    </div>
+                    <p className="text-[10px] text-surface-500 mt-1">
+                        {shortcutMode === 'numpad'
+                            ? 'Verwendet den Nummernblock (Numpad 1-9)'
+                            : 'Verwendet die Zahlenreihe über den Buchstaben (für Laptops)'}
+                    </p>
+                </div>
+
+                {/* Page Modifier Config */}
+                <div>
+                    <label className="block text-xs text-surface-300 mb-2">
+                        Page Modifier Keys
+                    </label>
+                    <div className="space-y-1.5">
+                        {[0, 1, 2, 3, 4].map((pageIdx) => (
+                            <div key={pageIdx} className="flex items-center gap-2">
+                                <span className="text-[10px] text-surface-400 w-14 shrink-0">
+                                    Seite {pageIdx + 1}:
+                                </span>
+                                <select
+                                    value={pageModifiers[pageIdx] || 'Ctrl'}
+                                    onChange={(e) => setPageModifier(pageIdx, e.target.value)}
+                                    className="flex-1 px-2 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 focus:outline-none focus:border-accent/50 transition-colors"
+                                >
+                                    <option value="Ctrl">Ctrl</option>
+                                    <option value="RCtrl">Right Ctrl</option>
+                                    <option value="Alt">Alt</option>
+                                    <option value="Shift">Shift</option>
+                                    <option value="Ctrl+Alt">Ctrl+Alt</option>
+                                    <option value="Ctrl+Shift">Ctrl+Shift</option>
+                                    <option value="Alt+Shift">Alt+Shift</option>
+                                    <option value="Meta">Meta (⌘/Win)</option>
+                                </select>
+                                <span className="text-[10px] text-surface-500 font-mono shrink-0">
+                                    + {shortcutMode === 'numpad' ? 'Num' : ''}1-9
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Reference */}
+                <div className="grid grid-cols-2 gap-2 text-xs text-surface-300">
+                    <div className="flex items-center gap-2">
+                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
+                            ESC
+                        </kbd>
+                        <span>Panic Stop</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
+                            Rechtsklick
+                        </kbd>
+                        <span>Sound Editor</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
+                            Mittelklick
+                        </kbd>
+                        <span>Slot leeren</span>
+                    </div>
                 </div>
             </div>
 
@@ -212,39 +330,6 @@ const Settings: React.FC = () => {
                         <p className="text-[10px] text-surface-400">
                             Beide Geräte müssen im selben Netzwerk sein.
                         </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Keyboard Shortcuts Info */}
-            <div className="space-y-3">
-                <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
-                    Shortcuts
-                </h3>
-                <div className="grid grid-cols-2 gap-2 text-xs text-surface-300">
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            Ctrl+Num
-                        </kbd>
-                        <span>Seite 1</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            Alt+Num
-                        </kbd>
-                        <span>Seite 2</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            ESC
-                        </kbd>
-                        <span>Panic Stop</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            Rechtsklick
-                        </kbd>
-                        <span>Loop Toggle</span>
                     </div>
                 </div>
             </div>
