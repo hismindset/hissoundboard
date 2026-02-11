@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -19,6 +20,7 @@ jobs:
             platform: linux
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -30,11 +32,44 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Linux: install system dependencies for uiohook-napi and RPM maker
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libevdev-dev \
+            libasound2-dev \
+            libx11-dev \
+            libxtst-dev \
+            libpng-dev \
+            libxkbcommon-x11-dev \
+            rpm \
+            dpkg \
+            fakeroot
+
+      # Windows: ensure Visual Studio build tools are available
+      - name: Setup MSVC (Windows)
+        if: matrix.platform == 'win32'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install dependencies
         run: npm ci
+        env:
+          # Prevent interactive prompts
+          CI: true
 
       - name: Make distributables
         run: npm run make
+        env:
+          CI: true
+          # Disable code signing on CI (no certificates available)
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
