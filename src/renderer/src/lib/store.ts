@@ -1,93 +1,156 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { Sound, PlaybackMode } from '../types/sound';
 
-interface Sound {
-  id: number;
-  name: string;
-  filePath: string;
-  playbackMode: 'one-shot' | 'loop';
-  looping?: boolean;
-}
+const SLOTS_PER_PAGE = 9;
+const NUM_PAGES = 10;
+
+// Create a unique key for a page+slot combination
+const slotKey = (page: number, slot: number) => `${page}-${slot}`;
 
 interface SoundboardState {
-  sounds: Sound[][];
-  currentPage: number;
-  monitorDevice: string | null;
-  outputDevice: string | null;
-  addSound: (sound: Omit<Sound, 'playbackMode' | 'looping'>) => void;
-  toggleLoop: (soundId: number) => void;
-  setPlaybackMode: (soundId: number, mode: 'one-shot' | 'loop') => void;
-  resetAllLoops: () => void;
-  nextPage: () => void;
-  prevPage: () => void;
-  playSound: (soundId: number) => void;
-  setMonitorDevice: (deviceId: string) => void;
-  setOutputDevice: (deviceId: string) => void;
+    /** Map of "page-slot" → Sound */
+    sounds: Record<string, Sound>;
+    /** Currently visible page (0-based) */
+    currentPage: number;
+    /** IDs of currently looping sounds */
+    activeSounds: Set<string>;
+    /** Monitor device ID (local speakers) */
+    monitorDeviceId: string;
+    /** Output device ID (virtual cable for voicechat) */
+    outputDeviceId: string;
+
+    // Actions
+    addSound: (page: number, slot: number, sound: Sound) => void;
+    removeSound: (page: number, slot: number) => void;
+    setPlaybackMode: (page: number, slot: number, mode: PlaybackMode) => void;
+    getSound: (page: number, slot: number) => Sound | undefined;
+    setCurrentPage: (page: number) => void;
+    nextPage: () => void;
+    prevPage: () => void;
+    setMonitorDevice: (deviceId: string) => void;
+    setOutputDevice: (deviceId: string) => void;
+    setActive: (soundId: string) => void;
+    setInactive: (soundId: string) => void;
+    clearAllActive: () => void;
+    getAllSoundsForRemote: () => { page: number; slot: number; sound: Sound }[];
 }
 
-const NUM_PAGES = 10;
-const SLOTS_PER_PAGE = 9;
+export const useSoundboardStore = create<SoundboardState>()(
+    persist(
+        (set, get) => ({
+            sounds: {},
+            currentPage: 0,
+            activeSounds: new Set<string>(),
+            monitorDeviceId: '',
+            outputDeviceId: '',
 
-export const useSoundboardStore = create<SoundboardState>((set, get) => ({
-  sounds: Array.from({ length: NUM_PAGES }, () => []),
-  currentPage: 0,
-  monitorDevice: null,
-  outputDevice: null,
-  addSound: (sound) =>
-    set((state) => {
-      const newSound: Sound = { ...sound, playbackMode: 'one-shot', looping: false };
-      const newSounds = [...state.sounds];
-      const pageIndex = Math.floor(sound.id / SLOTS_PER_PAGE);
-      const pageSounds = newSounds[pageIndex];
-      const existingSoundIndex = pageSounds.findIndex((s) => s.id === sound.id);
+            addSound: (page, slot, sound) =>
+                set((state) => ({
+                    sounds: { ...state.sounds, [slotKey(page, slot)]: sound },
+                })),
 
-      if (existingSoundIndex !== -1) {
-        pageSounds[existingSoundIndex] = newSound;
-      } else {
-        pageSounds.push(newSound);
-      }
-      return { sounds: newSounds };
-    }),
-  toggleLoop: (soundId) =>
-    set((state) => ({
-      sounds: state.sounds.map((page, pageIndex) =>
-        page.map((s) =>
-          s.id === soundId && pageIndex === Math.floor(soundId / SLOTS_PER_PAGE)
-            ? { ...s, looping: !s.looping }
-            : s
-        )
-      ),
-    })),
-  setPlaybackMode: (soundId, mode) =>
-    set((state) => ({
-      sounds: state.sounds.map((page, pageIndex) =>
-        page.map((s) =>
-          s.id === soundId && pageIndex === Math.floor(soundId / SLOTS_PER_PAGE)
-            ? { ...s, playbackMode: mode }
-            : s
-        )
-      ),
-    })),
-  resetAllLoops: () =>
-    set((state) => ({
-      sounds: state.sounds.map((page) => page.map((s) => ({ ...s, looping: false }))),
-    })),
-  nextPage: () =>
-    set((state) => ({
-      currentPage: (state.currentPage + 1) % NUM_PAGES,
-    })),
-  prevPage: () =>
-    set((state) => ({
-      currentPage: (state.currentPage - 1 + NUM_PAGES) % NUM_PAGES,
-    })),
-  playSound: (soundId) => {
-    const state = get();
-    const pageIndex = Math.floor(soundId / SLOTS_PER_PAGE);
-    const sound = state.sounds[pageIndex].find((s) => s.id === soundId);
-    if (sound) {
-      // Logic to play sound will be handled in the component
-      console.log('Playing sound:', sound);
-    }
-  },
-  setMonitorDevice: (deviceId) => set({ monitorDevice: deviceId }),
-  setOutputDevice: (deviceId) => set({ outputDevice: deviceId }),
-}));
+            removeSound: (page, slot) =>
+                set((state) => {
+                    const newSounds = { ...state.sounds };
+                    delete newSounds[slotKey(page, slot)];
+                    return { sounds: newSounds };
+                }),
+
+            setPlaybackMode: (page, slot, mode) =>
+                set((state) => {
+                    const key = slotKey(page, slot);
+                    const sound = state.sounds[key];
+                    if (!sound) return state;
+                    return {
+                        sounds: {
+                            ...state.sounds,
+                            [key]: { ...sound, playbackMode: mode },
+                        },
+                    };
+                }),
+
+            getSound: (page, slot) => {
+                return get().sounds[slotKey(page, slot)];
+            },
+
+            setCurrentPage: (page) => set({ currentPage: page }),
+
+            nextPage: () =>
+                set((state) => ({
+                    currentPage: (state.currentPage + 1) % NUM_PAGES,
+                })),
+
+            prevPage: () =>
+                set((state) => ({
+                    currentPage: (state.currentPage - 1 + NUM_PAGES) % NUM_PAGES,
+                })),
+
+            setMonitorDevice: (deviceId) => set({ monitorDeviceId: deviceId }),
+            setOutputDevice: (deviceId) => set({ outputDeviceId: deviceId }),
+
+            setActive: (soundId) =>
+                set((state) => {
+                    const next = new Set(state.activeSounds);
+                    next.add(soundId);
+                    return { activeSounds: next };
+                }),
+
+            setInactive: (soundId) =>
+                set((state) => {
+                    const next = new Set(state.activeSounds);
+                    next.delete(soundId);
+                    return { activeSounds: next };
+                }),
+
+            clearAllActive: () => set({ activeSounds: new Set() }),
+
+            getAllSoundsForRemote: () => {
+                const state = get();
+                const result: { page: number; slot: number; sound: Sound }[] = [];
+                for (const [key, sound] of Object.entries(state.sounds)) {
+                    const [pageStr, slotStr] = key.split('-');
+                    result.push({
+                        page: parseInt(pageStr),
+                        slot: parseInt(slotStr),
+                        sound,
+                    });
+                }
+                return result;
+            },
+        }),
+        {
+            name: 'opensoundboard-storage',
+            // Serialize/deserialize Set<string>
+            storage: {
+                getItem: (name) => {
+                    const raw = localStorage.getItem(name);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (parsed?.state?.activeSounds) {
+                        parsed.state.activeSounds = new Set(parsed.state.activeSounds);
+                    }
+                    return parsed;
+                },
+                setItem: (name, value) => {
+                    const toStore = {
+                        ...value,
+                        state: {
+                            ...value.state,
+                            activeSounds: Array.from(value.state.activeSounds || []),
+                        },
+                    };
+                    localStorage.setItem(name, JSON.stringify(toStore));
+                },
+                removeItem: (name) => localStorage.removeItem(name),
+            },
+            partialize: (state) => ({
+                sounds: state.sounds,
+                currentPage: state.currentPage,
+                monitorDeviceId: state.monitorDeviceId,
+                outputDeviceId: state.outputDeviceId,
+                activeSounds: state.activeSounds,
+            }),
+        }
+    )
+);

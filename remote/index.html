@@ -1,69 +1,440 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
+
 <head>
-  <title>OpenSoundBoard Remote</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: sans-serif;
-      background-color: #1a202c;
-      color: white;
-    }
-    #grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-      padding: 1rem;
-    }
-    .cell {
-      aspect-ratio: 1 / 1;
-      background-color: #2d3748;
-      border-radius: 0.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <div id="grid"></div>
-  <script>
-    const ws = new WebSocket(`ws://${window.location.host}`);
-    const grid = document.getElementById('grid');
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>OpenSoundBoard Remote</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    ws.onopen = () => {
-      console.log('Connected to WebSocket server');
-      fetch('/sounds')
-        .then(res => res.json())
-        .then(sounds => {
-          renderGrid(sounds);
-        });
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'sounds-updated') {
-        renderGrid(data.sounds);
-      }
-    };
-
-    function renderGrid(sounds) {
-      grid.innerHTML = '';
-      for (let i = 0; i < 9; i++) {
-        const sound = sounds[0]?.[i];
-        const cell = document.createElement('div');
-        cell.classList.add('cell');
-        cell.textContent = sound ? sound.name : i + 1;
-        if (sound) {
-          cell.onclick = () => {
-            ws.send(JSON.stringify({ type: 'play-sound', soundId: sound.id }));
-          };
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        grid.appendChild(cell);
-      }
-    }
-  </script>
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #080912;
+            color: #e8eaf6;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .logo-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #8b5cf6;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .status.connected {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .status.disconnected {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        /* Page Navigation */
+        .page-nav {
+            display: flex;
+            gap: 6px;
+            padding: 12px 16px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .page-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .page-btn {
+            min-width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #13152e;
+            color: rgba(255, 255, 255, 0.4);
+            position: relative;
+        }
+
+        .page-btn.active {
+            background: linear-gradient(135deg, #7c3aed, #5b21b6);
+            color: white;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+            transform: scale(1.08);
+        }
+
+        .page-btn .dot {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #8b5cf6;
+        }
+
+        /* Sound Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 12px 16px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease-out;
+            -webkit-tap-highlight-color: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cell.empty {
+            background: rgba(13, 14, 31, 0.6);
+            border: 2px dashed rgba(255, 255, 255, 0.08);
+        }
+
+        .cell.has-sound {
+            background: linear-gradient(135deg, #1a1f3d, #13152e);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+        }
+
+        .cell.has-sound:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 25px rgba(139, 92, 246, 0.5);
+            border-color: rgba(139, 92, 246, 0.6);
+        }
+
+        .cell.looping {
+            border: 2px solid rgba(139, 92, 246, 0.6);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        .cell-name {
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            padding: 0 8px;
+            line-height: 1.2;
+            color: rgba(255, 255, 255, 0.85);
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cell-mode {
+            font-size: 9px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+
+        .cell-mode.loop {
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+        }
+
+        .cell-mode.one-shot {
+            background: rgba(0, 212, 255, 0.1);
+            color: rgba(0, 212, 255, 0.7);
+        }
+
+        .cell-num {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            font-size: 10px;
+            font-family: 'SF Mono', monospace;
+            color: rgba(255, 255, 255, 0.15);
+        }
+
+        .empty-icon {
+            width: 20px;
+            height: 20px;
+            color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Panic Button */
+        .panic-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 16px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+            background: rgba(8, 9, 18, 0.95);
+            border-top: 1px solid rgba(139, 92, 246, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .panic-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #dc2626, #991b1b);
+            color: white;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .panic-btn:active {
+            transform: scale(0.97);
+            box-shadow: 0 0 30px rgba(220, 38, 38, 0.5);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        @keyframes pulseGlow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 0 25px rgba(139, 92, 246, 0.6);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="logo">
+            <div class="logo-dot"></div>
+            <span>OpenSoundBoard</span>
+        </div>
+        <div class="status disconnected" id="status">Verbinde...</div>
+    </div>
+
+    <div class="page-nav" id="pageNav"></div>
+    <div class="grid" id="grid"></div>
+
+    <div class="panic-bar">
+        <button class="panic-btn" id="panicBtn">⛔ PANIC STOP</button>
+    </div>
+
+    <script>
+        const NUMPAD_LAYOUT = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+        const NUM_PAGES = 10;
+
+        let currentPage = 0;
+        let soundsData = []; // Array of { page, slot, sound }
+        let ws = null;
+
+        // ─── WebSocket Connection ────────────────────────────────────────────
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.host}`);
+
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Verbunden';
+                document.getElementById('status').className = 'status connected';
+                // Request current sounds
+                ws.send(JSON.stringify({ type: 'request-sounds' }));
+            };
+
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Getrennt';
+                document.getElementById('status').className = 'status disconnected';
+                // Reconnect after 2s
+                setTimeout(connect, 2000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'sounds-update') {
+                        soundsData = data.sounds || [];
+                        renderPageNav();
+                        renderGrid();
+                    }
+                } catch (e) {
+                    console.error('Invalid message:', e);
+                }
+            };
+        }
+
+        // ─── Page Navigation ────────────────────────────────────────────────
+        function renderPageNav() {
+            const nav = document.getElementById('pageNav');
+            nav.innerHTML = '';
+
+            // Which pages have sounds?
+            const pagesWithSounds = new Set();
+            soundsData.forEach(s => pagesWithSounds.add(s.page));
+
+            for (let i = 0; i < NUM_PAGES; i++) {
+                const btn = document.createElement('button');
+                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                btn.textContent = i + 1;
+
+                if (pagesWithSounds.has(i) && i !== currentPage) {
+                    const dot = document.createElement('span');
+                    dot.className = 'dot';
+                    btn.appendChild(dot);
+                }
+
+                btn.onclick = () => {
+                    currentPage = i;
+                    renderPageNav();
+                    renderGrid();
+                };
+
+                nav.appendChild(btn);
+            }
+        }
+
+        // ─── Grid Rendering ─────────────────────────────────────────────────
+        function renderGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 9; i++) {
+                const soundEntry = soundsData.find(
+                    s => s.page === currentPage && s.slot === i
+                );
+
+                const cell = document.createElement('div');
+                cell.className = `cell ${soundEntry ? 'has-sound' : 'empty'}`;
+
+                // Numpad label
+                const numLabel = document.createElement('span');
+                numLabel.className = 'cell-num';
+                numLabel.textContent = NUMPAD_LAYOUT[i];
+                cell.appendChild(numLabel);
+
+                if (soundEntry) {
+                    const name = document.createElement('div');
+                    name.className = 'cell-name';
+                    name.textContent = soundEntry.sound.name;
+                    cell.appendChild(name);
+
+                    const mode = document.createElement('div');
+                    mode.className = `cell-mode ${soundEntry.sound.playbackMode === 'loop' ? 'loop' : 'one-shot'}`;
+                    mode.textContent = soundEntry.sound.playbackMode;
+                    cell.appendChild(mode);
+
+                    cell.onclick = () => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'play-sound',
+                                page: currentPage,
+                                slot: i,
+                            }));
+                            // Visual feedback
+                            cell.style.transform = 'scale(0.92)';
+                            cell.style.boxShadow = '0 0 25px rgba(139, 92, 246, 0.5)';
+                            setTimeout(() => {
+                                cell.style.transform = '';
+                                cell.style.boxShadow = '';
+                            }, 150);
+                        }
+                    };
+                } else {
+                    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    icon.setAttribute('class', 'empty-icon');
+                    icon.setAttribute('viewBox', '0 0 24 24');
+                    icon.setAttribute('fill', 'none');
+                    icon.setAttribute('stroke', 'currentColor');
+                    icon.setAttribute('stroke-width', '1.5');
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('stroke-linecap', 'round');
+                    path.setAttribute('stroke-linejoin', 'round');
+                    path.setAttribute('d', 'M12 4.5v15m7.5-7.5h-15');
+                    icon.appendChild(path);
+                    cell.appendChild(icon);
+                }
+
+                grid.appendChild(cell);
+            }
+        }
+
+        // ─── Panic Button ───────────────────────────────────────────────────
+        document.getElementById('panicBtn').onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Send a panic signal - trigger each sound ID shouldn't exist, so use a special command
+                // We'll send a play-sound with a special panic flag
+                ws.send(JSON.stringify({ type: 'play-sound', page: -1, slot: -1 }));
+            }
+        };
+
+        // ─── Initialize ─────────────────────────────────────────────────────
+        renderPageNav();
+        renderGrid();
+        connect();
+    </script>
 </body>
+
 </html>
