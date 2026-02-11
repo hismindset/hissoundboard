@@ -3,6 +3,7 @@
     "productName": "OpenSoundBoard",
     "version": "1.0.0",
     "description": "A modern, dark-themed soundboard application with dual audio output, global shortcuts, and remote control.",
+    "author": "Florian Göhring",
     "main": ".vite/build/main.js",
     "scripts": {
         "start": "electron-forge start",
@@ -48,7 +49,9 @@
     "config": {
         "forge": {
             "packagerConfig": {
-                "asar": true
+                "asar": {
+                    "unpack": "**/node_modules/uiohook-napi/**"
+                }
             },
             "rebuildConfig": {},
             "makers": [
