@@ -291,24 +291,47 @@
         let ws = null;
 
         // ─── WebSocket Connection ────────────────────────────────────────────
+        let connectAttempt = 0;
         function connect() {
-            ws = new WebSocket(`ws://${window.location.host}`);
+            connectAttempt++;
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = connectAttempt > 1 ? `Verbindet... (Versuch ${connectAttempt})` : 'Verbindet...';
+            statusEl.className = 'status disconnected';
+
+            try {
+                ws = new WebSocket(`ws://${window.location.host}`);
+            } catch (e) {
+                statusEl.textContent = 'Fehler beim Verbinden';
+                setTimeout(connect, 3000);
+                return;
+            }
+
+            // Timeout: if not connected within 5s, retry
+            const connectTimeout = setTimeout(() => {
+                if (ws && ws.readyState !== WebSocket.OPEN) {
+                    ws.close();
+                }
+            }, 5000);
 
             ws.onopen = () => {
-                document.getElementById('status').textContent = 'Verbunden';
-                document.getElementById('status').className = 'status connected';
+                clearTimeout(connectTimeout);
+                connectAttempt = 0;
+                statusEl.textContent = 'Verbunden';
+                statusEl.className = 'status connected';
                 // Request current sounds
                 ws.send(JSON.stringify({ type: 'request-sounds' }));
             };
 
             ws.onclose = () => {
-                document.getElementById('status').textContent = 'Getrennt';
-                document.getElementById('status').className = 'status disconnected';
+                clearTimeout(connectTimeout);
+                statusEl.textContent = 'Getrennt – Verbinde erneut...';
+                statusEl.className = 'status disconnected';
                 // Reconnect after 2s
                 setTimeout(connect, 2000);
             };
 
             ws.onerror = () => {
+                clearTimeout(connectTimeout);
                 ws.close();
             };
 

@@ -19,6 +19,8 @@ function App() {
     const currentPage = useSoundboardStore((s) => s.currentPage);
     const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
     const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
+    const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
+    const outputVolume = useSoundboardStore((s) => s.outputVolume);
     const setActive = useSoundboardStore((s) => s.setActive);
     const setInactive = useSoundboardStore((s) => s.setInactive);
     const getAllSoundsForRemote = useSoundboardStore((s) => s.getAllSoundsForRemote);
@@ -53,7 +55,9 @@ function App() {
                         {
                             onStart: () => setActive(sound.id),
                             onEnd: () => setInactive(sound.id),
-                        }
+                        },
+                        monitorVolume,
+                        outputVolume,
                     );
                 }
             }
@@ -110,7 +114,7 @@ function App() {
             {/* Main content area */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Grid / Settings area */}
-                <div className="flex-1 flex flex-col items-center justify-center px-6 pb-6 gap-4 overflow-auto">
+                <div className={`flex-1 flex flex-col px-6 pb-6 gap-4 overflow-auto ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4'}`}>
                     {view === 'grid' ? (
                         <>
                             <PageNav />

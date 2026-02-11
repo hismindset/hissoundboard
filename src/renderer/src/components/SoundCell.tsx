@@ -25,6 +25,8 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
     });
     const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
     const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
+    const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
+    const outputVolume = useSoundboardStore((s) => s.outputVolume);
     const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
     const assignToSlot = useSoundboardStore((s) => s.assignToSlot);
     const unassignSlot = useSoundboardStore((s) => s.unassignSlot);
@@ -53,7 +55,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
         await audioController.playSound(sound, monitorDeviceId, outputDeviceId, {
             onStart: () => setActive(sound.id),
             onEnd: () => setInactive(sound.id),
-        });
+        }, monitorVolume, outputVolume);
     }, [sound, monitorDeviceId, outputDeviceId, setActive, setInactive]);
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {

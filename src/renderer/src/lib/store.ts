@@ -28,6 +28,12 @@ interface SoundboardState {
     // ── Audio Routing ────────────────────────────────────────────────────
     monitorDeviceId: string;
     outputDeviceId: string;
+    /** Master volume for monitor output 0.0–1.0 */
+    monitorVolume: number;
+    /** Master volume for output device (voicechat) 0.0–1.0 */
+    outputVolume: number;
+    /** Custom sounds directory (empty = default) */
+    customSoundsDir: string;
 
     // ── Shortcut Config ──────────────────────────────────────────────────
     shortcutMode: ShortcutMode;
@@ -58,6 +64,9 @@ interface SoundboardState {
     // Audio
     setMonitorDevice: (deviceId: string) => void;
     setOutputDevice: (deviceId: string) => void;
+    setMonitorVolume: (volume: number) => void;
+    setOutputVolume: (volume: number) => void;
+    setCustomSoundsDir: (dir: string) => void;
 
     // Active sounds
     setActive: (soundId: string) => void;
@@ -103,6 +112,9 @@ export const useSoundboardStore = create<SoundboardState>()(
             activeSounds: new Set<string>(),
             monitorDeviceId: '',
             outputDeviceId: '',
+            monitorVolume: 1.0,
+            outputVolume: 0.5,
+            customSoundsDir: '',
             shortcutMode: 'numpad',
             pageModifiers: { ...DEFAULT_PAGE_MODIFIERS },
             libraryOpen: false,
@@ -179,6 +191,9 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             setMonitorDevice: (deviceId) => set({ monitorDeviceId: deviceId }),
             setOutputDevice: (deviceId) => set({ outputDeviceId: deviceId }),
+            setMonitorVolume: (volume) => set({ monitorVolume: Math.max(0, Math.min(1, volume)) }),
+            setOutputVolume: (volume) => set({ outputVolume: Math.max(0, Math.min(1, volume)) }),
+            setCustomSoundsDir: (dir) => set({ customSoundsDir: dir }),
 
             // ── Active Sounds ────────────────────────────────────────────────
 

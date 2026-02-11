@@ -56,6 +56,9 @@ const api = {
     /** Get the path to the sounds directory */
     getSoundsDir: (): Promise<string> => ipcRenderer.invoke('get-sounds-dir'),
 
+    /** Set custom sounds directory */
+    setSoundsDir: (dir: string) => ipcRenderer.send('set-sounds-dir', dir),
+
     // ─── Shortcut Config ─────────────────────────────────────────────────────
 
     /** Send shortcut configuration to main process */

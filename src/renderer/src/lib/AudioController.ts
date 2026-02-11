@@ -25,7 +25,11 @@ class AudioController {
         callbacks: {
             onStart?: () => void;
             onEnd?: () => void;
-        }
+        },
+        /** Master volume for monitor device 0.0–1.0 */
+        monitorVolume: number = 1.0,
+        /** Master volume for output device 0.0–1.0 */
+        outputVolume: number = 1.0,
     ): Promise<boolean> {
         // For loop mode: if already playing, stop it (toggle behavior)
         if (sound.playbackMode === 'loop' && this.activeSounds.has(sound.id)) {
@@ -41,10 +45,10 @@ class AudioController {
         const outputAudio = new Audio(sound.filePath);
         elements.push(monitorAudio, outputAudio);
 
-        // Apply volume (gain 0.0 – 2.0)
-        const vol = Math.max(0, Math.min(2, sound.volume ?? 1.0));
-        monitorAudio.volume = Math.min(1, vol); // HTMLAudioElement caps at 1
-        outputAudio.volume = Math.min(1, vol);
+        // Apply per-sound volume * master volume for each device
+        const soundVol = Math.max(0, Math.min(2, sound.volume ?? 1.0));
+        monitorAudio.volume = Math.min(1, soundVol * monitorVolume);
+        outputAudio.volume = Math.min(1, soundVol * outputVolume);
 
         // For volume > 1.0, use Web Audio API gain node if possible
         // Otherwise cap at 1.0 (HTMLAudioElement limit)

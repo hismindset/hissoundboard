@@ -17,6 +17,7 @@ interface ElectronApi {
     downloadUrl: (url: string) => Promise<string>;
     getPathForFile: (file: File) => string;
     getSoundsDir: () => Promise<string>;
+    setSoundsDir: (dir: string) => void;
     setShortcutConfig: (config: ShortcutConfig) => void;
     sendSoundsForRemote: (sounds: unknown) => void;
 }

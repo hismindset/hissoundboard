@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import type { Sound } from '../types/sound';
+import { formatSoundName, generateId } from '../lib/utils';
 import ConfirmModal from './ConfirmModal';
 
 interface LibraryProps {
@@ -13,6 +14,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const removeFromLibrary = useSoundboardStore((s) => s.removeFromLibrary);
+    const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
     const unassignSlot = useSoundboardStore((s) => s.unassignSlot);
     const getUsedSoundIds = useSoundboardStore((s) => s.getUsedSoundIds);
 
@@ -20,9 +22,13 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
     const [showUnusedOnly, setShowUnusedOnly] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+    // Download state
+    const [downloadUrl, setDownloadUrl] = useState('');
+    const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
+    const [downloadMessage, setDownloadMessage] = useState('');
+
     const usedIds = useMemo(() => getUsedSoundIds(), [grid, getUsedSoundIds]);
 
-    /** Get all grid positions where a given sound is used */
     const getSoundUsage = useCallback((soundId: string) => {
         const usage: { page: number; slot: number }[] = [];
         for (const [key, id] of Object.entries(grid)) {
@@ -36,11 +42,9 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
 
     const filteredSounds = useMemo(() => {
         let sounds = Object.values(library);
-
         if (showUnusedOnly) {
             sounds = sounds.filter((s) => !usedIds.has(s.id));
         }
-
         if (search.trim()) {
             const q = search.toLowerCase();
             sounds = sounds.filter(
@@ -49,18 +53,14 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                     s.originalName.toLowerCase().includes(q)
             );
         }
-
         sounds.sort((a, b) => b.createdAt - a.createdAt);
         return sounds;
     }, [library, showUnusedOnly, search, usedIds]);
 
-    const handleDragStart = useCallback(
-        (e: React.DragEvent, soundId: string) => {
-            e.dataTransfer.setData('application/x-soundboard-id', soundId);
-            e.dataTransfer.effectAllowed = 'copy';
-        },
-        []
-    );
+    const handleDragStart = useCallback((e: React.DragEvent, soundId: string) => {
+        e.dataTransfer.setData('application/x-soundboard-id', soundId);
+        e.dataTransfer.effectAllowed = 'copy';
+    }, []);
 
     const handleDeleteClick = useCallback((soundId: string) => {
         setDeleteTarget(soundId);
@@ -68,15 +68,51 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
 
     const handleConfirmDelete = useCallback(() => {
         if (!deleteTarget) return;
-        // First remove from all grid slots
         const usage = getSoundUsage(deleteTarget);
         for (const { page, slot } of usage) {
             unassignSlot(page, slot);
         }
-        // Then remove from library
         removeFromLibrary(deleteTarget);
         setDeleteTarget(null);
     }, [deleteTarget, getSoundUsage, unassignSlot, removeFromLibrary]);
+
+    const handleDownload = useCallback(async () => {
+        if (!downloadUrl.trim()) return;
+        setDownloadStatus('downloading');
+        setDownloadMessage('');
+        try {
+            const soundUrl = await window.api.downloadUrl(downloadUrl.trim());
+
+            const urlObj = new URL(downloadUrl.trim());
+            const pathParts = urlObj.pathname.split('/');
+            const rawName = pathParts[pathParts.length - 1] || 'Downloaded Sound';
+            const displayName = formatSoundName(decodeURIComponent(rawName));
+
+            const id = generateId();
+            const newSound: Sound = {
+                id,
+                originalName: rawName,
+                displayName,
+                filePath: soundUrl,
+                volume: 1.0,
+                trimStart: 0,
+                trimEnd: 0,
+                playbackMode: 'one-shot',
+                createdAt: Date.now(),
+            };
+            addToLibrary(newSound);
+
+            setDownloadStatus('success');
+            setDownloadMessage(`✓ ${displayName}`);
+            setDownloadUrl('');
+            setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
+        } catch (err) {
+            console.error('Download failed:', err);
+            setDownloadStatus('error');
+            setDownloadMessage('Download fehlgeschlagen');
+            setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
+        }
+    }, [downloadUrl, addToLibrary]);
 
     if (!libraryOpen) return null;
 
@@ -104,13 +140,46 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                     </button>
                 </div>
 
+                {/* Download URL */}
+                <div className="px-3 py-2 border-b border-surface-700/30">
+                    <div className="flex gap-1.5">
+                        <input
+                            type="text"
+                            value={downloadUrl}
+                            onChange={(e) => setDownloadUrl(e.target.value)}
+                            placeholder="MP3-URL eingeben..."
+                            onKeyDown={(e) => e.key === 'Enter' && handleDownload()}
+                            className="flex-1 px-2.5 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/50 transition-colors"
+                        />
+                        <button
+                            onClick={handleDownload}
+                            disabled={downloadStatus === 'downloading'}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${downloadStatus === 'downloading'
+                                ? 'bg-surface-600 text-surface-400 cursor-wait'
+                                : downloadStatus === 'success'
+                                    ? 'bg-neon-green/20 text-neon-green'
+                                    : downloadStatus === 'error'
+                                        ? 'bg-red-500/20 text-red-400'
+                                        : 'bg-accent hover:bg-accent-dark text-white'
+                                }`}
+                        >
+                            {downloadStatus === 'downloading' ? '⏳' : downloadStatus === 'success' ? '✓' : downloadStatus === 'error' ? '✕' : '↓'}
+                        </button>
+                    </div>
+                    {downloadMessage && (
+                        <p className={`text-[10px] mt-1 ${downloadStatus === 'error' ? 'text-red-400' : 'text-neon-green'}`}>
+                            {downloadMessage}
+                        </p>
+                    )}
+                </div>
+
                 {/* Search & Filter */}
                 <div className="px-3 py-2 space-y-2 border-b border-surface-700/30">
                     <input
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search sounds..."
+                        placeholder="Suchen..."
                         className="w-full px-2.5 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/50 transition-colors"
                     />
                     <label className="flex items-center gap-2 text-[10px] text-surface-400 cursor-pointer select-none">
@@ -120,7 +189,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                             onChange={(e) => setShowUnusedOnly(e.target.checked)}
                             className="rounded border-surface-600 bg-surface-800 text-accent focus:ring-accent/30 w-3 h-3"
                         />
-                        Show only unused sounds
+                        Nur unbenutzte anzeigen
                     </label>
                 </div>
 
@@ -129,8 +198,8 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                     {filteredSounds.length === 0 ? (
                         <div className="text-center py-8 text-surface-500 text-xs">
                             {Object.keys(library).length === 0
-                                ? 'Drop MP3 files on the grid to import'
-                                : 'No sounds match the filter'}
+                                ? 'MP3 auf das Grid ziehen oder URL herunterladen'
+                                : 'Keine Sounds gefunden'}
                         </div>
                     ) : (
                         filteredSounds.map((sound) => {
@@ -150,7 +219,6 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                         hover:bg-surface-700/50
                                     `}
                                 >
-                                    {/* Drag handle */}
                                     <svg className="w-3 h-3 text-surface-500/50 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                                         <circle cx="9" cy="6" r="1.5" />
                                         <circle cx="15" cy="6" r="1.5" />
@@ -159,8 +227,6 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                         <circle cx="9" cy="18" r="1.5" />
                                         <circle cx="15" cy="18" r="1.5" />
                                     </svg>
-
-                                    {/* Info */}
                                     <div className="flex-1 min-w-0">
                                         <div className="text-xs font-medium text-white/85 truncate">
                                             {sound.displayName}
@@ -182,13 +248,11 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                             )}
                                         </div>
                                     </div>
-
-                                    {/* Actions */}
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onEditSound(sound.id); }}
                                             className="p-1 rounded-lg text-surface-400 hover:text-accent-light hover:bg-surface-700 transition-colors"
-                                            title="Edit"
+                                            title="Bearbeiten"
                                         >
                                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
@@ -197,7 +261,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDeleteClick(sound.id); }}
                                             className="p-1 rounded-lg text-surface-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                            title="Delete from Library"
+                                            title="Aus Library löschen"
                                         >
                                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
@@ -211,19 +275,19 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                 </div>
             </div>
 
-            {/* Delete Confirmation Modal */}
+            {/* Delete Confirmation */}
             {deleteTarget && deleteSound && (
                 <ConfirmModal
-                    title="Delete Sound?"
-                    message={`Delete "${deleteSound.displayName}" from your library? This cannot be undone.`}
+                    title="Sound löschen?"
+                    message={`"${deleteSound.displayName}" aus der Library löschen? Das kann nicht rückgängig gemacht werden.`}
                     warnings={
                         deleteUsage.length > 0
                             ? deleteUsage.map(
-                                (u) => `This sound is used at Page ${u.page + 1}, Slot ${u.slot + 1}`
+                                (u) => `Dieser Sound wird benutzt auf Seite ${u.page + 1}, Slot ${u.slot + 1}`
                             )
                             : undefined
                     }
-                    confirmLabel="Delete"
+                    confirmLabel="Löschen"
                     onConfirm={handleConfirmDelete}
                     onCancel={() => setDeleteTarget(null)}
                 />

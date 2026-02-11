@@ -1,17 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSoundboardStore } from '../lib/store';
-import type { Sound } from '../types/sound';
-import { formatSoundName, generateId } from '../lib/utils';
 
 const Settings: React.FC = () => {
     const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
     const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
+    const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
+    const outputVolume = useSoundboardStore((s) => s.outputVolume);
+    const customSoundsDir = useSoundboardStore((s) => s.customSoundsDir);
     const setMonitorDevice = useSoundboardStore((s) => s.setMonitorDevice);
     const setOutputDevice = useSoundboardStore((s) => s.setOutputDevice);
-    const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
-    const assignToSlot = useSoundboardStore((s) => s.assignToSlot);
-    const grid = useSoundboardStore((s) => s.grid);
-    const currentPage = useSoundboardStore((s) => s.currentPage);
+    const setMonitorVolume = useSoundboardStore((s) => s.setMonitorVolume);
+    const setOutputVolume = useSoundboardStore((s) => s.setOutputVolume);
+    const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
     const pageModifiers = useSoundboardStore((s) => s.pageModifiers);
@@ -20,11 +20,7 @@ const Settings: React.FC = () => {
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [serverUrl, setServerUrl] = useState<string>('');
-    const [downloadUrl, setDownloadUrl] = useState('');
-    const [downloadStatus, setDownloadStatus] = useState<
-        'idle' | 'downloading' | 'success' | 'error'
-    >('idle');
-    const [downloadMessage, setDownloadMessage] = useState('');
+    const [defaultSoundsDir, setDefaultSoundsDir] = useState<string>('');
 
     // Load audio output devices
     useEffect(() => {
@@ -34,6 +30,11 @@ const Settings: React.FC = () => {
             );
             setDevices(audioOutputs);
         });
+    }, []);
+
+    // Load default sounds dir
+    useEffect(() => {
+        window.api.getSoundsDir().then((dir) => setDefaultSoundsDir(dir));
     }, []);
 
     // Generate QR code
@@ -47,62 +48,6 @@ const Settings: React.FC = () => {
         });
     }, []);
 
-    const handleDownload = useCallback(async () => {
-        if (!downloadUrl.trim()) return;
-        setDownloadStatus('downloading');
-        setDownloadMessage('');
-        try {
-            const soundUrl = await window.api.downloadUrl(downloadUrl.trim());
-
-            // Find the next free slot on the current page
-            let freeSlot = -1;
-            for (let i = 0; i < 9; i++) {
-                if (!grid[`${currentPage}-${i}`]) {
-                    freeSlot = i;
-                    break;
-                }
-            }
-
-            if (freeSlot === -1) {
-                setDownloadStatus('error');
-                setDownloadMessage('Alle Slots auf dieser Seite sind belegt!');
-                setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
-                return;
-            }
-
-            // Extract a display name from the URL
-            const urlObj = new URL(downloadUrl.trim());
-            const pathParts = urlObj.pathname.split('/');
-            const rawName = pathParts[pathParts.length - 1] || `Sound ${freeSlot + 1}`;
-            const displayName = formatSoundName(decodeURIComponent(rawName));
-
-            const id = generateId();
-            const newSound: Sound = {
-                id,
-                originalName: rawName,
-                displayName,
-                filePath: soundUrl,
-                volume: 1.0,
-                trimStart: 0,
-                trimEnd: 0,
-                playbackMode: 'one-shot',
-                createdAt: Date.now(),
-            };
-            addToLibrary(newSound);
-            assignToSlot(currentPage, freeSlot, id);
-
-            setDownloadStatus('success');
-            setDownloadMessage(`→ Slot ${freeSlot + 1}`);
-            setDownloadUrl('');
-            setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
-        } catch (err) {
-            console.error('Download failed:', err);
-            setDownloadStatus('error');
-            setDownloadMessage('Download fehlgeschlagen');
-            setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
-        }
-    }, [downloadUrl, grid, currentPage, addToLibrary, assignToSlot]);
-
     const sendShortcutConfig = useCallback(() => {
         window.api.setShortcutConfig?.({
             mode: shortcutMode,
@@ -110,10 +55,14 @@ const Settings: React.FC = () => {
         });
     }, [shortcutMode, pageModifiers]);
 
-    // Sync shortcut config to main process when it changes
     useEffect(() => {
         sendShortcutConfig();
     }, [sendShortcutConfig]);
+
+    // Sync custom sounds dir to main process
+    useEffect(() => {
+        window.api.setSoundsDir(customSoundsDir);
+    }, [customSoundsDir]);
 
     return (
         <div className="w-full max-w-md space-y-6 animate-fade-in">
@@ -125,12 +74,13 @@ const Settings: React.FC = () => {
                 Settings
             </h2>
 
-            {/* Audio Devices */}
+            {/* Audio Devices & Volume */}
             <div className="space-y-4">
                 <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
                     Audio Routing
                 </h3>
 
+                {/* Monitor */}
                 <div>
                     <label className="block text-xs text-surface-300 mb-1.5">
                         🔊 Monitor Device (Lokale Lautsprecher)
@@ -147,8 +97,22 @@ const Settings: React.FC = () => {
                             </option>
                         ))}
                     </select>
+                    <div className="flex items-center gap-3 mt-2">
+                        <span className="text-[10px] text-surface-400 w-8">
+                            {Math.round(monitorVolume * 100)}%
+                        </span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={Math.round(monitorVolume * 100)}
+                            onChange={(e) => setMonitorVolume(Number(e.target.value) / 100)}
+                            className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
+                        />
+                    </div>
                 </div>
 
+                {/* Output */}
                 <div>
                     <label className="block text-xs text-surface-300 mb-1.5">
                         🎧 Output Device (Virtuelles Kabel / Voicechat)
@@ -165,6 +129,52 @@ const Settings: React.FC = () => {
                             </option>
                         ))}
                     </select>
+                    <div className="flex items-center gap-3 mt-2">
+                        <span className="text-[10px] text-surface-400 w-8">
+                            {Math.round(outputVolume * 100)}%
+                        </span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={Math.round(outputVolume * 100)}
+                            onChange={(e) => setOutputVolume(Number(e.target.value) / 100)}
+                            className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Sounds Directory */}
+            <div className="space-y-3">
+                <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
+                    Speicherort
+                </h3>
+                <div className="bg-surface-800/60 rounded-xl border border-surface-600/30 p-3 space-y-2">
+                    <p className="text-xs text-surface-300">Aktiver Ordner:</p>
+                    <p className="text-[11px] text-white/70 font-mono break-all bg-surface-900/50 rounded-lg px-2.5 py-1.5">
+                        {customSoundsDir || defaultSoundsDir || 'Lädt...'}
+                    </p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={customSoundsDir}
+                            onChange={(e) => setCustomSoundsDir(e.target.value)}
+                            placeholder="Standard verwenden..."
+                            className="flex-1 px-2.5 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/50 transition-colors"
+                        />
+                        {customSoundsDir && (
+                            <button
+                                onClick={() => setCustomSoundsDir('')}
+                                className="px-3 py-1.5 rounded-lg text-[10px] text-surface-400 hover:text-white bg-surface-700/60 hover:bg-surface-700 transition-colors"
+                            >
+                                Reset
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-[10px] text-surface-500">
+                        Leer lassen = Standard ({defaultSoundsDir})
+                    </p>
                 </div>
             </div>
 
@@ -199,27 +209,22 @@ const Settings: React.FC = () => {
                             🔢 Standard (1-9)
                         </button>
                     </div>
-                    <p className="text-[10px] text-surface-500 mt-1">
-                        {shortcutMode === 'numpad'
-                            ? 'Verwendet den Nummernblock (Numpad 1-9)'
-                            : 'Verwendet die Zahlenreihe über den Buchstaben (für Laptops)'}
-                    </p>
                 </div>
 
-                {/* Page Modifier Config */}
+                {/* Per-Page Modifiers */}
                 <div>
                     <label className="block text-xs text-surface-300 mb-2">
-                        Page Modifier Keys
+                        Seiten-Modifikatoren
                     </label>
-                    <div className="space-y-1.5">
-                        {[0, 1, 2, 3, 4].map((pageIdx) => (
-                            <div key={pageIdx} className="flex items-center gap-2">
-                                <span className="text-[10px] text-surface-400 w-14 shrink-0">
-                                    Seite {pageIdx + 1}:
+                    <div className="grid grid-cols-2 gap-2">
+                        {Array.from({ length: 10 }, (_, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <span className="text-[10px] text-surface-400 w-10">
+                                    Seite {i + 1}
                                 </span>
                                 <select
-                                    value={pageModifiers[pageIdx] || 'Ctrl'}
-                                    onChange={(e) => setPageModifier(pageIdx, e.target.value)}
+                                    value={pageModifiers[i] || 'Ctrl'}
+                                    onChange={(e) => setPageModifier(i, e.target.value)}
                                     className="flex-1 px-2 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 focus:outline-none focus:border-accent/50 transition-colors"
                                 >
                                     <option value="Ctrl">Ctrl</option>
@@ -231,9 +236,6 @@ const Settings: React.FC = () => {
                                     <option value="Alt+Shift">Alt+Shift</option>
                                     <option value="Meta">Meta (⌘/Win)</option>
                                 </select>
-                                <span className="text-[10px] text-surface-500 font-mono shrink-0">
-                                    + {shortcutMode === 'numpad' ? 'Num' : ''}1-9
-                                </span>
                             </div>
                         ))}
                     </div>
@@ -253,55 +255,7 @@ const Settings: React.FC = () => {
                         </kbd>
                         <span>Sound Editor</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            Mittelklick
-                        </kbd>
-                        <span>Slot leeren</span>
-                    </div>
                 </div>
-            </div>
-
-            {/* Download */}
-            <div className="space-y-3">
-                <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
-                    Download
-                </h3>
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        value={downloadUrl}
-                        onChange={(e) => setDownloadUrl(e.target.value)}
-                        placeholder="MP3-URL eingeben..."
-                        onKeyDown={(e) => e.key === 'Enter' && handleDownload()}
-                        className="flex-1 px-3 py-2.5 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
-                    />
-                    <button
-                        onClick={handleDownload}
-                        disabled={downloadStatus === 'downloading'}
-                        className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${downloadStatus === 'downloading'
-                            ? 'bg-surface-600 text-surface-400 cursor-wait'
-                            : downloadStatus === 'success'
-                                ? 'bg-neon-green/20 text-neon-green'
-                                : downloadStatus === 'error'
-                                    ? 'bg-red-500/20 text-red-400'
-                                    : 'bg-accent hover:bg-accent-dark text-white hover:shadow-glow-purple'
-                            }`}
-                    >
-                        {downloadStatus === 'downloading'
-                            ? '⏳'
-                            : downloadStatus === 'success'
-                                ? '✓'
-                                : downloadStatus === 'error'
-                                    ? '✕'
-                                    : '↓'}
-                    </button>
-                </div>
-                {downloadMessage && (
-                    <p className={`text-xs ${downloadStatus === 'error' ? 'text-red-400' : 'text-neon-green'}`}>
-                        {downloadMessage}
-                    </p>
-                )}
             </div>
 
             {/* Remote Control */}

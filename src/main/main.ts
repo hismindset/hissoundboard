@@ -34,12 +34,16 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow;
 
-// Ensure sounds directory exists
-const soundsDir = path.join(app.getPath('userData'), 'sounds');
+// Sounds directory (can be overridden by renderer)
+const defaultSoundsDir = path.join(app.getPath('userData'), 'sounds');
+let customSoundsDir = '';
+
+const getSoundsDir = () => customSoundsDir || defaultSoundsDir;
 
 const ensureSoundsDir = () => {
-    if (!fs.existsSync(soundsDir)) {
-        fs.mkdirSync(soundsDir, { recursive: true });
+    const dir = getSoundsDir();
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
 };
 
@@ -285,7 +289,7 @@ const setupIpcHandlers = () => {
     protocol.handle('sound', (request) => {
         const reqUrl = new URL(request.url);
         const filePath = decodeURIComponent(reqUrl.pathname.replace(/^\/+/, ''));
-        const fullPath = path.join(soundsDir, filePath);
+        const fullPath = path.join(getSoundsDir(), filePath);
         const fileUrl = `file://${fullPath}`;
         console.log(`[sound://] Serving: ${request.url} -> ${fileUrl}`);
         return net.fetch(fileUrl);
@@ -296,8 +300,8 @@ const setupIpcHandlers = () => {
         'save-sound-file',
         async (_event, sourcePath: string, fileName: string) => {
             ensureSoundsDir();
-            const destPath = path.join(soundsDir, fileName);
-            if (path.dirname(sourcePath) !== soundsDir) {
+            const destPath = path.join(getSoundsDir(), fileName);
+            if (path.dirname(sourcePath) !== getSoundsDir()) {
                 fs.copyFileSync(sourcePath, destPath);
             }
             return `sound://play/${encodeURIComponent(fileName)}`;
@@ -314,7 +318,7 @@ const setupIpcHandlers = () => {
         ensureSoundsDir();
         return new Promise<string>((resolve, reject) => {
             const fileName = `download_${Date.now()}.mp3`;
-            const destPath = path.join(soundsDir, fileName);
+            const destPath = path.join(getSoundsDir(), fileName);
             const file = fs.createWriteStream(destPath);
 
             const httpProto = url.startsWith('https') ? https : httpModule;
@@ -357,7 +361,16 @@ const setupIpcHandlers = () => {
     // Get sounds directory path
     ipcMain.handle('get-sounds-dir', () => {
         ensureSoundsDir();
-        return soundsDir;
+        return getSoundsDir();
+    });
+
+    // Set custom sounds directory
+    ipcMain.on('set-sounds-dir', (_event, dir: string) => {
+        customSoundsDir = dir || '';
+        if (customSoundsDir) {
+            ensureSoundsDir();
+        }
+        console.log('[Sounds] Directory set to:', getSoundsDir());
     });
 
     // Receive shortcut configuration from renderer
@@ -378,7 +391,7 @@ app.on('ready', () => {
     createWindow();
     setupGlobalHooks();
 
-    server.listen(SERVER_PORT, () => {
+    server.listen(SERVER_PORT, '0.0.0.0', () => {
         console.log(`Remote control server running on http://${getLocalIp()}:${SERVER_PORT}`);
     });
 });
