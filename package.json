@@ -14,6 +14,7 @@
         "electron-squirrel-startup": "^1.0.1",
         "express": "^4.21.2",
         "howler": "^2.2.4",
+        "jimp": "^1.6.0",
         "qrcode": "^1.5.4",
         "uiohook-napi": "^1.5.4",
         "uuid": "^13.0.0",
@@ -40,6 +41,7 @@
         "@vitejs/plugin-react": "^4.3.4",
         "autoprefixer": "^10.4.20",
         "electron": "^35.1.2",
+        "png2icons": "^2.0.1",
         "postcss": "^8.5.1",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -49,6 +51,7 @@
     "config": {
         "forge": {
             "packagerConfig": {
+                "icon": "./resources/icon",
                 "asar": {
                     "unpack": "**/node_modules/uiohook-napi/**"
                 }
@@ -57,7 +60,9 @@
             "makers": [
                 {
                     "name": "@electron-forge/maker-squirrel",
-                    "config": {}
+                    "config": {
+                        "setupIcon": "./resources/icon.ico"
+                    }
                 },
                 {
                     "name": "@electron-forge/maker-zip",
@@ -67,11 +72,19 @@
                 },
                 {
                     "name": "@electron-forge/maker-deb",
-                    "config": {}
+                    "config": {
+                        "options": {
+                            "icon": "./resources/icon.png"
+                        }
+                    }
                 },
                 {
                     "name": "@electron-forge/maker-rpm",
-                    "config": {}
+                    "config": {
+                        "options": {
+                            "icon": "./resources/icon.png"
+                        }
+                    }
                 }
             ],
             "plugins": [

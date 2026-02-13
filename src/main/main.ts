@@ -50,6 +50,12 @@ const ensureSoundsDir = () => {
 // ─── Window Creation ─────────────────────────────────────────────────────────
 
 const createWindow = () => {
+    // Determine icon path based on platform
+    let iconPath = path.join(__dirname, '../../resources/icon.png');
+    if (process.platform === 'win32') {
+        iconPath = path.join(__dirname, '../../resources/icon.ico');
+    }
+
     mainWindow = new BrowserWindow({
         width: 1100,
         height: 720,
@@ -58,12 +64,18 @@ const createWindow = () => {
         backgroundColor: '#0d0e1f',
         titleBarStyle: 'hiddenInset',
         trafficLightPosition: { x: 16, y: 16 },
+        icon: iconPath,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
         },
     });
+
+    // On macOS, the Dock icon might need explicit setting in dev mode
+    if (process.platform === 'darwin' && MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+        app.dock?.setIcon(iconPath);
+    }
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
