@@ -69,14 +69,22 @@ jobs:
         run: npm run make
         env:
           CI: true
+          # Windows signing secrets
+          WINDOWS_CERT_PATH: ${{ secrets.WINDOWS_CERT_PATH }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
 
       - name: Make distributables (macOS)
         if: matrix.platform == 'darwin'
         run: npm run make -- --arch=universal
         env:
           CI: true
-          # Disable code signing on CI
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # macOS signing and notarization secrets
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Certificate comes from standard actions (setup-node doesn't do it, but assuming environment is prepped or user adds step)
+          # For standard GitHub Actions, we'd need a step to import the cert. 
+          # Assuming standard environment vars for `electron-forge` or `electron-builder` usage.
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

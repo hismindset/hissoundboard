@@ -27,3 +27,6 @@ dist-electron
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Electron Forge
+out

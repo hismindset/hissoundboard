@@ -30,7 +30,9 @@
         "@electron-forge/maker-squirrel": "^7.7.0",
         "@electron-forge/maker-zip": "^7.7.0",
         "@electron-forge/plugin-auto-unpack-natives": "^7.7.0",
+        "@electron-forge/plugin-fuses": "^7.11.1",
         "@electron-forge/plugin-vite": "^7.7.0",
+        "@electron/fuses": "^1.8.0",
         "@inquirer/prompts": "^7.2.1",
         "@types/express": "^5.0.0",
         "@types/howler": "^2.2.12",
@@ -50,87 +52,6 @@
         "tailwindcss": "^3.4.17",
         "tar": "^7.5.7",
         "typescript": "^5.7.3"
-    },
-    "config": {
-        "forge": {
-            "packagerConfig": {
-                "icon": "./resources/icon",
-                "osxUniversal": {},
-                "asar": true
-            },
-            "rebuildConfig": {
-                "force": true,
-                "onlyModules": [
-                    "uiohook-napi"
-                ]
-            },
-            "makers": [
-                {
-                    "name": "@electron-forge/maker-squirrel",
-                    "config": {
-                        "setupIcon": "./resources/icon.ico"
-                    }
-                },
-                {
-                    "name": "@electron-forge/maker-dmg",
-                    "config": {
-                        "icon": "./resources/icon.icns",
-                        "format": "ULFO"
-                    }
-                },
-                {
-                    "name": "@electron-forge/maker-zip",
-                    "platforms": [
-                        "darwin",
-                        "win32",
-                        "linux"
-                    ]
-                },
-                {
-                    "name": "@electron-forge/maker-deb",
-                    "config": {
-                        "options": {
-                            "icon": "./resources/icon.png"
-                        }
-                    }
-                },
-                {
-                    "name": "@electron-forge/maker-rpm",
-                    "config": {
-                        "options": {
-                            "icon": "./resources/icon.png"
-                        }
-                    }
-                }
-            ],
-            "plugins": [
-                {
-                    "name": "@electron-forge/plugin-auto-unpack-natives",
-                    "config": {}
-                },
-                {
-                    "name": "@electron-forge/plugin-vite",
-                    "config": {
-                        "build": [
-                            {
-                                "entry": "src/main/main.ts",
-                                "config": "vite.main.config.ts"
-                            },
-                            {
-                                "entry": "src/preload/preload.ts",
-                                "config": "vite.preload.config.ts"
-                            }
-                        ],
-                        "renderer": [
-                            {
-                                "name": "main_window",
-                                "config": "vite.renderer.config.ts"
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
     },
     "overrides": {
         "tar": "^7.5.7",
