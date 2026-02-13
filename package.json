@@ -23,14 +23,15 @@
         "zustand": "^5.0.3"
     },
     "devDependencies": {
-        "@electron-forge/cli": "^7.8.0",
-        "@electron-forge/maker-deb": "^7.8.0",
-        "@electron-forge/maker-dmg": "^7.11.1",
-        "@electron-forge/maker-rpm": "^7.8.0",
-        "@electron-forge/maker-squirrel": "^7.8.0",
-        "@electron-forge/maker-zip": "^7.8.0",
-        "@electron-forge/plugin-auto-unpack-natives": "^7.8.0",
-        "@electron-forge/plugin-vite": "^7.8.0",
+        "@electron-forge/cli": "^7.7.0",
+        "@electron-forge/maker-deb": "^7.7.0",
+        "@electron-forge/maker-dmg": "^7.7.0",
+        "@electron-forge/maker-rpm": "^7.7.0",
+        "@electron-forge/maker-squirrel": "^7.7.0",
+        "@electron-forge/maker-zip": "^7.7.0",
+        "@electron-forge/plugin-auto-unpack-natives": "^7.7.0",
+        "@electron-forge/plugin-vite": "^7.7.0",
+        "@inquirer/prompts": "^7.2.1",
         "@types/express": "^5.0.0",
         "@types/howler": "^2.2.12",
         "@types/node": "^22.13.4",
@@ -47,6 +48,7 @@
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "tailwindcss": "^3.4.17",
+        "tar": "^7.5.7",
         "typescript": "^5.7.3"
     },
     "config": {
@@ -54,9 +56,7 @@
             "packagerConfig": {
                 "icon": "./resources/icon",
                 "osxUniversal": {},
-                "asar": {
-                    "unpack": "{**/node_modules/uiohook-napi/**,**/node_modules/node-gyp-build/**}"
-                }
+                "asar": true
             },
             "rebuildConfig": {
                 "force": true,
@@ -131,5 +131,10 @@
                 }
             ]
         }
+    },
+    "overrides": {
+        "tar": "^7.5.7",
+        "tmp": "^0.2.5",
+        "make-fetch-happen": "^14.0.0"
     }
 }
