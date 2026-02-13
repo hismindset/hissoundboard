@@ -8,9 +8,10 @@ import os from 'os';
 import https from 'https';
 import httpModule from 'http';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
+import squirrelStartup from 'electron-squirrel-startup';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
+if (squirrelStartup) {
     app.quit();
 }
 
@@ -66,7 +67,7 @@ const createWindow = () => {
         trafficLightPosition: { x: 16, y: 16 },
         icon: iconPath,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
+            preload: path.join(__dirname, '../preload/preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
         },

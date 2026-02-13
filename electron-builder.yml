@@ -1,0 +1,51 @@
+appId: com.opensoundboard.app
+productName: OpenSoundBoard
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - resources/**/*
+  - package.json
+  # Native modules are automatically handled, but we can be explicit if needed
+  # - node_modules/**/* # usually not needed as builder handles dependencies
+
+# Unpack native modules
+asarUnpack:
+  - "**/*.node"
+  - "**/uiohook-napi/**"
+
+mac:
+  target: dmg
+  icon: resources/icon.icns
+  # CRITICAL: Disable signing as requested
+  identity: null
+  entitlements: entitlements.plist
+  entitlementsInherit: entitlements.plist
+  # For Apple Silicon, ad-hoc signing is required. builder does this automatically if identity is null.
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  sign: false
+
+win:
+  target: nsis
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: OpenSoundBoard
+
+linux:
+  target: AppImage
+  icon: resources/icon.png
+  category: Audio
+
+# Publish configuration (for GitHub Actions)
+publish:
+  provider: github
+  owner: mAdM4x1
+  repo: hissoundboard

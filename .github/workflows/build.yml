@@ -1,94 +1,77 @@
-name: Build OpenSoundBoard
+name: Build & Release
 
 on:
   push:
-    branches:
-      - '**'
-  workflow_dispatch:
+    tags:
+      - 'v*'
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            platform: win32
-          - os: macos-latest
-            platform: darwin
-          - os: ubuntu-latest
-            platform: linux
-
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: 'npm'
 
-      - name: Setup Python (for node-gyp)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      # Linux: install system dependencies for uiohook-napi and RPM maker
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libevdev-dev \
-            libasound2-dev \
-            libx11-dev \
-            libxtst-dev \
-            libpng-dev \
-            libxkbcommon-x11-dev \
-            rpm \
-            dpkg \
-            fakeroot
-
-      # Windows: ensure Visual Studio build tools are available
-      - name: Setup MSVC (Windows)
-        if: matrix.platform == 'win32'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm ci
-        env:
-          # Prevent interactive prompts
-          CI: true
+        # Use npm ci for clean install using package-lock.json
 
-      - name: Make distributables (Windows/Linux)
-        if: matrix.platform != 'darwin'
-        run: npm run make
-        env:
-          CI: true
-          # Windows signing secrets
-          WINDOWS_CERT_PATH: ${{ secrets.WINDOWS_CERT_PATH }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      - name: Run Tests (placeholder)
+        run: echo "No tests configured yet"
 
-      - name: Make distributables (macOS)
-        if: matrix.platform == 'darwin'
-        run: npm run make -- --arch=universal
-        env:
-          CI: true
-          # macOS signing and notarization secrets
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Certificate comes from standard actions (setup-node doesn't do it, but assuming environment is prepped or user adds step)
-          # For standard GitHub Actions, we'd need a step to import the cert. 
-          # Assuming standard environment vars for `electron-forge` or `electron-builder` usage.
+      - name: Build & Package
+        run: npm run dist -- --publish never
 
-      - name: Upload artifacts
+      - name: Upload Artifacts (Linux/Windows)
+        if: matrix.os != 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: opensoundboard-${{ matrix.platform }}
-          path: out/make/**/*
-          retention-days: 30
+          name: ${{ matrix.os }}-artifacts
+          path: |
+            release/*.exe
+            release/*.AppImage
+
+      - name: Upload Artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: release/*.dmg
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+      
+      - name: Display structure of downloaded files
+        run: ls -R
+      
+      # Since electron-builder's "publish: github" in the build step usually handles creating the release and uploading assets,
+      # we might rely on that. However, running it on multiple matrix jobs "publish" typically uploads to the draft or creates it.
+      # If we want to use softprops/action-gh-release to be explicit:
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            macos-artifacts/*.dmg
+            windows-latest-artifacts/*.exe
+            ubuntu-latest-artifacts/*.AppImage
+          generate_release_notes: true
+          draft: false
+          prerelease: false

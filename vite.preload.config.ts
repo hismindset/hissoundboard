@@ -1,26 +1,25 @@
-import type { ConfigEnv, UserConfig } from 'vite';
-import { defineConfig, mergeConfig } from 'vite';
-import { getBuildConfig, getBuildDefine, external, pluginHotRestart } from '@electron-forge/plugin-vite/dist/config/vite.base.config';
+import { defineConfig } from 'vite';
 
-export default defineConfig((env) => {
-    const forgeEnv = env as ConfigEnv<'build'>;
-    const { forgeConfigSelf } = forgeEnv;
-
-    const config: UserConfig = {
-        build: {
-            rollupOptions: {
-                external,
-                output: {
-                    format: 'cjs',
-                    inlineDynamicImports: true,
-                    entryFileNames: '[name].js',
-                    chunkFileNames: '[name].js',
-                    assetFileNames: '[name].[ext]',
-                },
+export default defineConfig({
+    build: {
+        ssr: true,
+        sourcemap: true,
+        target: 'chrome120', // Preload runs in renderer context but with Node access
+        outDir: 'dist/preload',
+        assetsDir: '.',
+        minify: process.env.NODE_ENV === 'production',
+        lib: {
+            entry: 'src/preload/preload.ts',
+            formats: ['cjs'],
+            fileName: () => '[name].js',
+        },
+        rollupOptions: {
+            external: ['electron'],
+            output: {
+                entryFileNames: '[name].js',
             },
         },
-        plugins: [pluginHotRestart('reload')],
-    };
-
-    return mergeConfig(getBuildConfig(forgeEnv), config);
+        emptyOutDir: true,
+        reportCompressedSize: false,
+    },
 });
