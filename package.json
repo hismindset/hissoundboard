@@ -53,11 +53,17 @@
         "forge": {
             "packagerConfig": {
                 "icon": "./resources/icon",
+                "osxUniversal": {},
                 "asar": {
-                    "unpack": "**/node_modules/uiohook-napi/**"
+                    "unpack": "{**/node_modules/uiohook-napi/**,**/node_modules/node-gyp-build/**}"
                 }
             },
-            "rebuildConfig": {},
+            "rebuildConfig": {
+                "force": true,
+                "onlyModules": [
+                    "uiohook-napi"
+                ]
+            },
             "makers": [
                 {
                     "name": "@electron-forge/maker-squirrel",

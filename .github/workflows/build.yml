@@ -64,11 +64,18 @@ jobs:
           # Prevent interactive prompts
           CI: true
 
-      - name: Make distributables
+      - name: Make distributables (Windows/Linux)
+        if: matrix.platform != 'darwin'
         run: npm run make
         env:
           CI: true
-          # Disable code signing on CI (no certificates available)
+
+      - name: Make distributables (macOS)
+        if: matrix.platform == 'darwin'
+        run: npm run make -- --arch=universal
+        env:
+          CI: true
+          # Disable code signing on CI
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload artifacts
