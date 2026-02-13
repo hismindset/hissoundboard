@@ -9,16 +9,19 @@ A modern, dark-themed soundboard application built with Electron, React, and Typ
 - **Portable:** Download the `.zip` file, extract it, and run `OpenSoundBoard.exe`.
 
 ### macOS
-Since this app is not signed with an Apple Developer ID, macOS will quarantine it and show an "App is damaged" error. To run it:
+- **Installer:** Download the `.dmg` file. Open it and drag `OpenSoundBoard` to the Applications folder.
+- **Portable:** Download the `.zip` file, extract, and run.
 
-1. Download the `.zip` file and extract `OpenSoundBoard.app`.
-2. Move it to your `/Applications` folder (optional).
-3. Open Terminal and run:
+> **Note:** Since this app is not signed with an Apple Developer ID, macOS will quarantine it and show an "App is damaged" error. To run it:
+
+1. Install the app to your `/Applications` folder (via DMG drag-and-drop or by moving the extracted app).
+2. Open Terminal and run:
    ```bash
-   xattr -cr /Path/To/OpenSoundBoard.app
+   xattr -cr /Applications/OpenSoundBoard.app
    ```
-   *(e.g., `xattr -cr /Applications/OpenSoundBoard.app`)*
-4. Run the app normally.
+   *(Or use the included `./fix_mac_app.sh` script)*
+3. Run the app normally.
+
 
 ### Linux
 - **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i OpenSoundBoard*.deb`.
