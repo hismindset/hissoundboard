@@ -122,11 +122,11 @@ wss.on('connection', (ws: WebSocket) => {
         try {
             const data = JSON.parse(message.toString());
             if (data.type === 'play-sound') {
-                if (data.page === -1 && data.slot === -1) {
+                if (data.pageId === '__PANIC__' || (data.page === -1 && data.slot === -1)) {
                     mainWindow?.webContents.send('panic-stop');
                 } else {
                     mainWindow?.webContents.send('trigger-sound', {
-                        page: data.page,
+                        pageId: data.pageId, // ID driven
                         slot: data.slot,
                     });
                 }

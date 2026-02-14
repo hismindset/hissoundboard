@@ -76,7 +76,7 @@ interface SoundboardState {
     toggleLibrary: () => void;
 
     // Remote
-    getAllSoundsForRemote: () => { pageIndex: number; pageId: string; slot: number; sound: Sound }[];
+    getAllSoundsForRemote: () => { pages: Partial<Page>[]; activePageId: string; sounds: { pageId: string; slot: number; sound: Sound }[] };
 
     // Utility
     getUnusedSounds: () => Sound[];
@@ -275,16 +275,15 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             getAllSoundsForRemote: () => {
                 const state = get();
-                const result: { pageIndex: number; pageId: string; slot: number; sound: Sound }[] = [];
+                const sounds: { pageId: string; slot: number; sound: Sound }[] = [];
 
-                state.pages.forEach((page, pageIndex) => {
+                state.pages.forEach((page) => {
                     for (let slot = 0; slot < 9; slot++) {
                         const soundId = state.grid[slotKey(page.id, slot)];
                         if (soundId) {
                             const sound = state.library[soundId];
                             if (sound) {
-                                result.push({
-                                    pageIndex,
+                                sounds.push({
                                     pageId: page.id,
                                     slot,
                                     sound
@@ -293,7 +292,12 @@ export const useSoundboardStore = create<SoundboardState>()(
                         }
                     }
                 });
-                return result;
+
+                return {
+                    pages: state.pages.map(p => ({ id: p.id, name: p.name, order: p.order })),
+                    activePageId: state.activePageId,
+                    sounds
+                };
             },
 
             // ── Utility ──────────────────────────────────────────────────────
