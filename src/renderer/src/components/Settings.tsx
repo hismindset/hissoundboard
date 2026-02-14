@@ -2,20 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useSoundboardStore } from '../lib/store';
 
 const Settings: React.FC = () => {
-    const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
-    const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
-    const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
-    const outputVolume = useSoundboardStore((s) => s.outputVolume);
+    // New Audio Settings Slice
+    const audioSettings = useSoundboardStore((s) => s.audioSettings);
+    const setAudioSettings = useSoundboardStore((s) => s.setAudioSettings);
+
     const customSoundsDir = useSoundboardStore((s) => s.customSoundsDir);
-    const setMonitorDevice = useSoundboardStore((s) => s.setMonitorDevice);
-    const setOutputDevice = useSoundboardStore((s) => s.setOutputDevice);
-    const setMonitorVolume = useSoundboardStore((s) => s.setMonitorVolume);
-    const setOutputVolume = useSoundboardStore((s) => s.setOutputVolume);
     const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
-    // pageModifiers removed from store
-    // const pages = useSoundboardStore((s) => s.pages); // Not needed here anymore
 
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -72,14 +66,14 @@ const Settings: React.FC = () => {
                 {/* Monitor */}
                 <div>
                     <label className="block text-xs text-surface-300 mb-1.5">
-                        🔊 Monitor Device (Lokale Lautsprecher)
+                        🔊 Monitor Device (Local)
                     </label>
                     <select
-                        value={monitorDeviceId}
-                        onChange={(e) => setMonitorDevice(e.target.value)}
+                        value={audioSettings.monitorDeviceId}
+                        onChange={(e) => setAudioSettings({ monitorDeviceId: e.target.value })}
                         className="w-full px-3 py-2.5 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
                     >
-                        <option value="">Standard</option>
+                        <option value="">Default</option>
                         {devices.map((d) => (
                             <option key={d.deviceId} value={d.deviceId}>
                                 {d.label || `Device ${d.deviceId.slice(0, 8)}`}
@@ -87,15 +81,18 @@ const Settings: React.FC = () => {
                         ))}
                     </select>
                     <div className="flex items-center gap-3 mt-2">
-                        <span className="text-[10px] text-surface-400 w-8">
-                            {Math.round(monitorVolume * 100)}%
-                        </span>
+                        <button
+                            onClick={() => setAudioSettings({ monitorMuted: !audioSettings.monitorMuted })}
+                            className={`text-xs w-8 ${audioSettings.monitorMuted ? 'text-red-400' : 'text-surface-400'}`}
+                        >
+                            {audioSettings.monitorMuted ? 'MUTE' : `${Math.round(audioSettings.monitorVolume * 100)}%`}
+                        </button>
                         <input
                             type="range"
                             min="0"
                             max="100"
-                            value={Math.round(monitorVolume * 100)}
-                            onChange={(e) => setMonitorVolume(Number(e.target.value) / 100)}
+                            value={Math.round(audioSettings.monitorVolume * 100)}
+                            onChange={(e) => setAudioSettings({ monitorVolume: Number(e.target.value) / 100 })}
                             className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
                         />
                     </div>
@@ -104,14 +101,14 @@ const Settings: React.FC = () => {
                 {/* Output */}
                 <div>
                     <label className="block text-xs text-surface-300 mb-1.5">
-                        🎧 Output Device (Virtuelles Kabel / Voicechat)
+                        🎧 Output Device (Virtual Cable)
                     </label>
                     <select
-                        value={outputDeviceId}
-                        onChange={(e) => setOutputDevice(e.target.value)}
+                        value={audioSettings.outputDeviceId}
+                        onChange={(e) => setAudioSettings({ outputDeviceId: e.target.value })}
                         className="w-full px-3 py-2.5 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
                     >
-                        <option value="">Standard</option>
+                        <option value="">Default</option>
                         {devices.map((d) => (
                             <option key={d.deviceId} value={d.deviceId}>
                                 {d.label || `Device ${d.deviceId.slice(0, 8)}`}
@@ -119,15 +116,18 @@ const Settings: React.FC = () => {
                         ))}
                     </select>
                     <div className="flex items-center gap-3 mt-2">
-                        <span className="text-[10px] text-surface-400 w-8">
-                            {Math.round(outputVolume * 100)}%
-                        </span>
+                        <button
+                            onClick={() => setAudioSettings({ outputMuted: !audioSettings.outputMuted })}
+                            className={`text-xs w-8 ${audioSettings.outputMuted ? 'text-red-400' : 'text-surface-400'}`}
+                        >
+                            {audioSettings.outputMuted ? 'MUTE' : `${Math.round(audioSettings.outputVolume * 100)}%`}
+                        </button>
                         <input
                             type="range"
                             min="0"
                             max="100"
-                            value={Math.round(outputVolume * 100)}
-                            onChange={(e) => setOutputVolume(Number(e.target.value) / 100)}
+                            value={Math.round(audioSettings.outputVolume * 100)}
+                            onChange={(e) => setAudioSettings({ outputVolume: Number(e.target.value) / 100 })}
                             className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
                         />
                     </div>
@@ -137,19 +137,19 @@ const Settings: React.FC = () => {
             {/* Sounds Directory */}
             <div className="space-y-3">
                 <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
-                    Speicherort
+                    Location
                 </h3>
                 <div className="bg-surface-800/60 rounded-xl border border-surface-600/30 p-3 space-y-2">
-                    <p className="text-xs text-surface-300">Aktiver Ordner:</p>
+                    <p className="text-xs text-surface-300">Active Directory:</p>
                     <p className="text-[11px] text-white/70 font-mono break-all bg-surface-900/50 rounded-lg px-2.5 py-1.5">
-                        {customSoundsDir || defaultSoundsDir || 'Lädt...'}
+                        {customSoundsDir || defaultSoundsDir || 'Loading...'}
                     </p>
                     <div className="flex gap-2">
                         <input
                             type="text"
                             value={customSoundsDir}
                             onChange={(e) => setCustomSoundsDir(e.target.value)}
-                            placeholder="Standard verwenden..."
+                            placeholder="Use Default..."
                             className="flex-1 px-2.5 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/50 transition-colors"
                         />
                         {customSoundsDir && (
@@ -161,9 +161,6 @@ const Settings: React.FC = () => {
                             </button>
                         )}
                     </div>
-                    <p className="text-[10px] text-surface-500">
-                        Leer lassen = Standard ({defaultSoundsDir})
-                    </p>
                 </div>
             </div>
 
@@ -173,7 +170,6 @@ const Settings: React.FC = () => {
                     Shortcuts
                 </h3>
 
-                {/* Mode Toggle */}
                 <div>
                     <label className="block text-xs text-surface-300 mb-2">
                         Key Mode
@@ -203,22 +199,6 @@ const Settings: React.FC = () => {
                 <div className="text-xs text-surface-400 bg-surface-800/50 p-3 rounded-lg">
                     Page modifiers are now managed in the Page Sidebar.
                 </div>
-
-                {/* Reference */}
-                <div className="grid grid-cols-2 gap-2 text-xs text-surface-300">
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            ESC
-                        </kbd>
-                        <span>Panic Stop</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <kbd className="px-1.5 py-0.5 bg-surface-700 rounded text-surface-200 font-mono text-[10px]">
-                            Rechtsklick
-                        </kbd>
-                        <span>Sound Editor</span>
-                    </div>
-                </div>
             </div>
 
             {/* Remote Control */}
@@ -236,7 +216,7 @@ const Settings: React.FC = () => {
                     )}
                     <div className="flex flex-col gap-2">
                         <p className="text-xs text-surface-300">
-                            Scanne den QR-Code mit deinem Handy oder öffne:
+                            Scan to connect:
                         </p>
                         <a
                             href={serverUrl}
@@ -244,9 +224,6 @@ const Settings: React.FC = () => {
                         >
                             {serverUrl}
                         </a>
-                        <p className="text-[10px] text-surface-400">
-                            Beide Geräte müssen im selben Netzwerk sein.
-                        </p>
                     </div>
                 </div>
             </div>

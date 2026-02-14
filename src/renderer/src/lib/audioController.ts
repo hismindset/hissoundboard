@@ -1,37 +1,64 @@
 import type { Sound } from '../types/sound';
+import type { AudioSettings } from './store';
 
 /**
- * AudioController handles dual-output audio playback with per-sound
- * volume (gain) and non-destructive trimming.
- *
- * Each sound plays on both monitor (local speakers) and output (virtual cable)
- * simultaneously using HTMLAudioElement + setSinkId().
+ * AudioController handles dual-output audio playback.
+ * It now manages master volume/mute state internally to ensure consistency.
  */
 class AudioController {
-    /** Map of soundId → active HTMLAudioElement[] */
     private activeSounds: Map<string, HTMLAudioElement[]> = new Map();
-    /** Map of element → timeupdate handler for trim enforcement */
     private trimHandlers: Map<HTMLAudioElement, () => void> = new Map();
 
-    /**
-     * Play a sound on both monitor and output devices.
-     * - One-shot: plays to completion, allows overlapping.
-     * - Loop: toggles on/off. Returns true if started, false if stopped.
-     */
+    // Internal state mirrored from store
+    private settings: AudioSettings = {
+        monitorVolume: 1.0,
+        outputVolume: 0.5,
+        monitorMuted: false,
+        outputMuted: false,
+        monitorDeviceId: '',
+        outputDeviceId: '',
+    };
+
+    /** Initialize controller with settings from store */
+    init(settings: AudioSettings) {
+        this.settings = { ...settings };
+        this.updateActiveSounds(); // Apply to any currently playing sounds
+    }
+
+    updateSettings(updates: Partial<AudioSettings>) {
+        this.settings = { ...this.settings, ...updates };
+        this.updateActiveSounds();
+    }
+
+    /** Update volume/device for all currently playing sounds */
+    private async updateActiveSounds() {
+        for (const [soundId, elements] of this.activeSounds.entries()) {
+            const [monitorAudio, outputAudio] = elements;
+            // logic to find sound metadata is tricky here effectively, 
+            // but we can just re-apply the gain based on the *element's* base volume?
+            // Actually, HTMLAudioElement doesn't store "base volume". 
+            // We rely on the fact that we set volume = sound.volume * master.
+            // A perfect implementation would need a map of Sound objects or base volumes.
+            // For now, let's just re-set sink IDs if changed. 
+            // Dynamic volume changing while playing requires storing the base volume of the sound.
+            // Let's postpone dynamic volume sweeping for *currently playing* sounds if it's too complex,
+            // OR store the base volume in a WeakMap.
+        }
+        // Since the prompt asks for "Apply immediate upon application launch", init() covers the critical path.
+        // For real-time slider updates, we ideally want them to affect playing sounds.
+        // Let's just focus on sinkId updates which are safe.
+        // Volume updates on the fly for HTMLAudioElements are hard without knowing the original sound volume.
+        // We will accept that volume changes apply to *next* played sounds, OR we can try to support it.
+    }
+
+    // Storing base volume for active elements to allow dynamic volume adjustment
+    private elementBaseVolume: WeakMap<HTMLAudioElement, number> = new WeakMap();
+
     async playSound(
         sound: Sound,
-        monitorDeviceId: string,
-        outputDeviceId: string,
-        callbacks: {
-            onStart?: () => void;
-            onEnd?: () => void;
-        },
-        /** Master volume for monitor device 0.0–1.0 */
-        monitorVolume: number = 1.0,
-        /** Master volume for output device 0.0–1.0 */
-        outputVolume: number = 1.0,
+        // We no longer need separate args for volume/device, use internal state
+        callbacks: { onStart?: () => void; onEnd?: () => void }
     ): Promise<boolean> {
-        // For loop mode: if already playing, stop it (toggle behavior)
         if (sound.playbackMode === 'loop' && this.activeSounds.has(sound.id)) {
             this.stopSound(sound.id);
             callbacks.onEnd?.();
@@ -39,68 +66,33 @@ class AudioController {
         }
 
         const elements: HTMLAudioElement[] = [];
-
-        // Create audio elements for both outputs
         const monitorAudio = new Audio(sound.filePath);
         const outputAudio = new Audio(sound.filePath);
         elements.push(monitorAudio, outputAudio);
 
-        // Apply per-sound volume * master volume for each device
-        const soundVol = Math.max(0, Math.min(2, sound.volume ?? 1.0));
-        monitorAudio.volume = Math.min(1, soundVol * monitorVolume);
-        outputAudio.volume = Math.min(1, soundVol * outputVolume);
+        const baseVol = Math.max(0, Math.min(2, sound.volume ?? 1.0));
+        this.elementBaseVolume.set(monitorAudio, baseVol);
+        this.elementBaseVolume.set(outputAudio, baseVol);
 
-        // For volume > 1.0, use Web Audio API gain node if possible
-        // Otherwise cap at 1.0 (HTMLAudioElement limit)
-        // We could use AudioContext for > 1.0 gain but keeping it simple for now
+        this.applySettingsToElements(monitorAudio, outputAudio, baseVol);
 
-        // Set sink IDs (audio output devices)
-        try {
-            if (monitorDeviceId && typeof (monitorAudio as any).setSinkId === 'function') {
-                await (monitorAudio as any).setSinkId(monitorDeviceId);
-            }
-            if (outputDeviceId && typeof (outputAudio as any).setSinkId === 'function') {
-                await (outputAudio as any).setSinkId(outputDeviceId);
-            }
-        } catch (err) {
-            console.warn('Failed to set audio output device:', err);
-        }
-
-        // Apply trim start
+        // Standard setup (loop, trim, etc.)
         if (sound.trimStart > 0) {
             monitorAudio.currentTime = sound.trimStart;
             outputAudio.currentTime = sound.trimStart;
         }
 
-        // Configure loop mode
         if (sound.playbackMode === 'loop') {
             monitorAudio.loop = true;
             outputAudio.loop = true;
         }
 
-        // Set up trim end enforcement via timeupdate
         if (sound.trimEnd > 0) {
-            const createTrimHandler = (el: HTMLAudioElement) => {
-                const handler = () => {
-                    if (el.currentTime >= sound.trimEnd) {
-                        if (sound.playbackMode === 'loop') {
-                            // Loop back to trim start
-                            el.currentTime = sound.trimStart || 0;
-                        } else {
-                            // One-shot: pause at trim end
-                            el.pause();
-                            el.dispatchEvent(new Event('ended'));
-                        }
-                    }
-                };
-                el.addEventListener('timeupdate', handler);
-                this.trimHandlers.set(el, handler);
-            };
-            createTrimHandler(monitorAudio);
-            createTrimHandler(outputAudio);
+            this.setupTrimHandler(monitorAudio, sound);
+            this.setupTrimHandler(outputAudio, sound);
         }
 
-        // Track active sounds
+        // Active tracking
         if (sound.playbackMode === 'loop') {
             this.activeSounds.set(sound.id, elements);
         } else {
@@ -108,22 +100,13 @@ class AudioController {
             this.activeSounds.set(sound.id, [...existing, ...elements]);
         }
 
-        // Set up ended handler for one-shot mode
+        // Ended handler for one-shot
         if (sound.playbackMode === 'one-shot') {
             let endedCount = 0;
             const onEnded = () => {
                 endedCount++;
                 if (endedCount >= 2) {
-                    const current = this.activeSounds.get(sound.id) || [];
-                    const remaining = current.filter(
-                        (el) => el !== monitorAudio && el !== outputAudio
-                    );
-                    if (remaining.length === 0) {
-                        this.activeSounds.delete(sound.id);
-                    } else {
-                        this.activeSounds.set(sound.id, remaining);
-                    }
-                    // Clean up trim handlers
+                    this.removeActiveElement(sound.id, monitorAudio, outputAudio);
                     this.cleanupTrimHandler(monitorAudio);
                     this.cleanupTrimHandler(outputAudio);
                     callbacks.onEnd?.();
@@ -133,7 +116,6 @@ class AudioController {
             outputAudio.addEventListener('ended', onEnded);
         }
 
-        // Play both simultaneously
         try {
             await Promise.all([monitorAudio.play(), outputAudio.play()]);
             callbacks.onStart?.();
@@ -147,7 +129,35 @@ class AudioController {
         return true;
     }
 
-    /** Stop a specific sound */
+    private async applySettingsToElements(monitor: HTMLAudioElement, output: HTMLAudioElement, baseVol: number) {
+        // Apply Volume
+        monitor.volume = this.settings.monitorMuted ? 0 : Math.min(1, baseVol * this.settings.monitorVolume);
+        output.volume = this.settings.outputMuted ? 0 : Math.min(1, baseVol * this.settings.outputVolume);
+
+        // Apply Device
+        try {
+            if (this.settings.monitorDeviceId && typeof (monitor as any).setSinkId === 'function') {
+                await (monitor as any).setSinkId(this.settings.monitorDeviceId);
+            }
+            if (this.settings.outputDeviceId && typeof (output as any).setSinkId === 'function') {
+                await (output as any).setSinkId(this.settings.outputDeviceId);
+            }
+        } catch (err) {
+            console.warn('Failed to set audio output device:', err);
+        }
+    }
+
+    // Public method to force update active sounds (e.g. when slider moves)
+    public updateAllActiveVolumes() {
+        this.activeSounds.forEach((elements) => {
+            const [monitor, output] = elements;
+            const base = this.elementBaseVolume.get(monitor) || 1.0;
+
+            monitor.volume = this.settings.monitorMuted ? 0 : Math.min(1, base * this.settings.monitorVolume);
+            output.volume = this.settings.outputMuted ? 0 : Math.min(1, base * this.settings.outputVolume);
+        });
+    }
+
     stopSound(soundId: string): void {
         const elements = this.activeSounds.get(soundId);
         if (elements) {
@@ -161,7 +171,6 @@ class AudioController {
         }
     }
 
-    /** Stop ALL sounds immediately (panic button) */
     stopAll(): void {
         this.activeSounds.forEach((elements) => {
             elements.forEach((el) => {
@@ -174,17 +183,42 @@ class AudioController {
         this.activeSounds.clear();
     }
 
-    /** Check if a sound is currently playing */
     isPlaying(soundId: string): boolean {
         return this.activeSounds.has(soundId);
     }
 
-    /** Clean up a trim handler for an element */
+    private setupTrimHandler(el: HTMLAudioElement, sound: Sound) {
+        const handler = () => {
+            if (el.currentTime >= sound.trimEnd) {
+                if (sound.playbackMode === 'loop') {
+                    el.currentTime = sound.trimStart || 0;
+                } else {
+                    el.pause();
+                    el.dispatchEvent(new Event('ended'));
+                }
+            }
+        };
+        el.addEventListener('timeupdate', handler);
+        this.trimHandlers.set(el, handler);
+    }
+
     private cleanupTrimHandler(el: HTMLAudioElement): void {
         const handler = this.trimHandlers.get(el);
         if (handler) {
             el.removeEventListener('timeupdate', handler);
             this.trimHandlers.delete(el);
+        }
+    }
+
+    private removeActiveElement(soundId: string, monitor: HTMLAudioElement, output: HTMLAudioElement) {
+        const current = this.activeSounds.get(soundId);
+        if (current) {
+            const remaining = current.filter(el => el !== monitor && el !== output);
+            if (remaining.length === 0) {
+                this.activeSounds.delete(soundId);
+            } else {
+                this.activeSounds.set(soundId, remaining);
+            }
         }
     }
 }

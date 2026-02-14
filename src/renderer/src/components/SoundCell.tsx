@@ -26,10 +26,9 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
         const id = s.grid[cellKey];
         return id ? s.activeSounds.has(id) : false;
     });
-    const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
-    const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
-    const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
-    const outputVolume = useSoundboardStore((s) => s.outputVolume);
+
+    // Legacy volume props removed - controller handles it
+
     const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
     const assignToSlot = useSoundboardStore((s) => s.assignToSlot);
     const unassignSlot = useSoundboardStore((s) => s.unassignSlot);
@@ -55,11 +54,11 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
 
     const handleClick = useCallback(async () => {
         if (!sound) return;
-        await audioController.playSound(sound, monitorDeviceId, outputDeviceId, {
+        await audioController.playSound(sound, {
             onStart: () => setActive(sound.id),
             onEnd: () => setInactive(sound.id),
-        }, monitorVolume, outputVolume);
-    }, [sound, monitorDeviceId, outputDeviceId, setActive, setInactive]);
+        });
+    }, [sound, setActive, setInactive]);
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
@@ -103,19 +102,15 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
             if (sourceSlotKey) {
                 // Grid-to-grid move: clear the source slot
                 // sourceSlotKey is "pageId-slotIndex"
-                // Check if it matches active page if we support dragging between pages?
-                // The dragging logic uses keys directly so it should work if assignToSlot takes pageId.
-
                 const parts = sourceSlotKey.split('-');
                 const srcSlot = parseInt(parts.pop() || '0');
-                const srcPageId = parts.join('-'); // Rejoin in case pageId has hyphens (UUIDs do!)
+                const srcPageId = parts.join('-');
 
                 // If dropping on same slot, do nothing
                 if (srcPageId === page && srcSlot === slot) return;
 
                 // If target slot has a sound, swap them
                 if (soundId) {
-                    // Check if we can assign to source (might be on different page)
                     assignToSlot(srcPageId, srcSlot, soundId);
                 } else {
                     unassignSlot(srcPageId, srcSlot);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Grid from './components/Grid';
 import PageList from './components/PageList';
 import Settings from './components/Settings';
@@ -18,16 +18,40 @@ function App() {
     const grid = useSoundboardStore((s) => s.grid);
     const pages = useSoundboardStore((s) => s.pages);
     const activePageId = useSoundboardStore((s) => s.activePageId);
-    const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
-    const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
-    const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
-    const outputVolume = useSoundboardStore((s) => s.outputVolume);
+
+    // New Audio Settings
+    // Ensure we have a fallback if store state is corrupted/undefined
+    const audioSettings = useSoundboardStore((s) => s.audioSettings || {
+        monitorVolume: 1.0,
+        outputVolume: 0.5,
+        monitorMuted: false,
+        outputMuted: false,
+        monitorDeviceId: '',
+        outputDeviceId: ''
+    });
+
     const setActive = useSoundboardStore((s) => s.setActive);
     const setInactive = useSoundboardStore((s) => s.setInactive);
     const getAllSoundsForRemote = useSoundboardStore((s) => s.getAllSoundsForRemote);
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
+
+    // Initialize AudioController
+    useEffect(() => {
+        if (audioSettings) {
+            audioController.init(audioSettings);
+        }
+    }, []);
+
+    // Sync settings updates to AudioController
+    useEffect(() => {
+        if (audioSettings) {
+            audioController.updateSettings(audioSettings);
+            // Only update active volumes if settings exist
+            audioController.updateAllActiveVolumes();
+        }
+    }, [audioSettings]);
 
     const handleEditSound = useCallback((soundId: string) => {
         setEditingSoundId(soundId);
@@ -38,15 +62,16 @@ function App() {
     }, []);
 
     // Sync shortcut config to main process
-    // This must be here so it runs regardless of current view
     useEffect(() => {
-        window.api.setShortcutConfig?.({
-            mode: shortcutMode,
-            pages: pages.map(p => ({ id: p.id, modifierKeys: p.modifierKeys })),
-        });
+        if (window.api && window.api.setShortcutConfig) {
+            window.api.setShortcutConfig({
+                mode: shortcutMode,
+                pages: pages ? pages.map(p => ({ id: p.id, modifierKeys: p.modifierKeys })) : [],
+            });
+        }
     }, [shortcutMode, pages]);
 
-    // Handle IPC events from main process
+    // Handle IPC events
     useEffect(() => {
         const cleanupPanic = window.api.onPanicStop(() => {
             audioController.stopAll();
@@ -56,42 +81,34 @@ function App() {
         const cleanupTrigger = window.api.onTriggerSound(async (payload) => {
             let targetPageId = '';
 
-            // If main sends pageID (new system)
             if (payload.pageId) {
                 targetPageId = payload.pageId;
-            }
-            // Fallback: If main sends page index (legacy/numpad default)
-            else if (typeof payload.page === 'number') {
-                const targetPage = pages[payload.page];
+            } else if (typeof payload.page === 'number') {
+                const targetPage = pages && pages[payload.page];
                 if (targetPage) {
                     targetPageId = targetPage.id;
                 }
             }
 
             if (!targetPageId && activePageId) {
-                // Should we trigger on active page? 
-                // Only if the shortcut was meant for "Active Page".
-                // But blindly triggering on active page might be wrong.
+                // Fallback logic
             }
 
             if (!targetPageId) return;
 
             const key = `${targetPageId}-${payload.slot}`;
-            const soundId = grid[key];
+            const soundId = grid && grid[key];
             if (soundId) {
-                const sound = library[soundId];
+                const sound = library && library[soundId];
                 if (sound) {
-                    await audioController.playSound(
-                        sound,
-                        monitorDeviceId,
-                        outputDeviceId,
-                        {
+                    try {
+                        await audioController.playSound(sound, {
                             onStart: () => setActive(sound.id),
                             onEnd: () => setInactive(sound.id),
-                        },
-                        monitorVolume,
-                        outputVolume,
-                    );
+                        });
+                    } catch (err) {
+                        console.error("Failed to play sound via trigger:", err);
+                    }
                 }
             }
         });
@@ -105,7 +122,7 @@ function App() {
             cleanupTrigger();
             cleanupRemote();
         };
-    }, [library, grid, pages, activePageId, monitorDeviceId, outputDeviceId, clearAllActive, setActive, setInactive, getAllSoundsForRemote]);
+    }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, getAllSoundsForRemote]);
 
     return (
         <div className="dark h-screen w-screen bg-surface-950 text-white flex flex-col overflow-hidden">
@@ -121,7 +138,6 @@ function App() {
                     </span>
                 </div>
                 <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-                    {/* Library toggle */}
                     <button
                         onClick={toggleLibrary}
                         className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${libraryOpen
@@ -131,7 +147,6 @@ function App() {
                     >
                         ♫ Library
                     </button>
-                    {/* Settings toggle */}
                     <button
                         onClick={() => setView(view === 'grid' ? 'settings' : 'grid')}
                         className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${view === 'settings'
@@ -146,13 +161,8 @@ function App() {
 
             {/* Main content area */}
             <div className="flex-1 flex overflow-hidden">
+                {view === 'grid' && <PageList />}
 
-                {/* Left Sidebar: Page List */}
-                {view === 'grid' && (
-                    <PageList />
-                )}
-
-                {/* Grid / Settings area */}
                 <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4 px-6 overflow-auto'}`}>
                     {view === 'grid' ? (
                         <>
@@ -166,16 +176,11 @@ function App() {
                     )}
                 </div>
 
-                {/* Right Sidebar: Library */}
-                {libraryOpen && (
-                    <Library onEditSound={handleEditSound} />
-                )}
+                {libraryOpen && <Library onEditSound={handleEditSound} />}
             </div>
 
-            {/* Bottom gradient line */}
             <div className="h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
 
-            {/* Library toggle tab (when closed) */}
             {!libraryOpen && view === 'grid' && (
                 <button
                     onClick={toggleLibrary}
@@ -188,7 +193,6 @@ function App() {
                 </button>
             )}
 
-            {/* Sound Editor Modal */}
             {editingSoundId && (
                 <SoundEditor
                     soundId={editingSoundId}

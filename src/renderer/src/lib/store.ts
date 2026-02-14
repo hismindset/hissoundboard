@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Sound, GridSlot } from '../types/sound';
 import type { Page } from '../types/page';
@@ -9,37 +9,31 @@ const slotKey = (pageId: string, slot: number) => `${pageId}-${slot}`;
 
 export type ShortcutMode = 'numpad' | 'standard';
 
+export interface AudioSettings {
+    monitorVolume: number; // 0.0 to 1.0
+    outputVolume: number; // 0.0 to 1.0
+    monitorMuted: boolean;
+    outputMuted: boolean;
+    monitorDeviceId: string;
+    outputDeviceId: string;
+}
+
 interface SoundboardState {
     // ── Library (source of truth) ────────────────────────────────────────
-    /** All imported sounds keyed by UUID */
     library: Record<string, Sound>;
 
     // ── Grid (view references) ───────────────────────────────────────────
-    /** "pageId-slotIndex" → Sound UUID or null */
     grid: Record<string, GridSlot>;
-
-    /** List of dynamic pages */
     pages: Page[];
-
-    /** ID of the currently visible page */
     activePageId: string;
-
-    /** Set of sound UUIDs currently playing/looping */
     activeSounds: Set<string>;
 
-    // ── Audio Routing ────────────────────────────────────────────────────
-    monitorDeviceId: string;
-    outputDeviceId: string;
-    /** Master volume for monitor output 0.0–1.0 */
-    monitorVolume: number;
-    /** Master volume for output device (voicechat) 0.0–1.0 */
-    outputVolume: number;
-    /** Custom sounds directory (empty = default) */
+    // ── Audio Settings ───────────────────────────────────────────────────
+    audioSettings: AudioSettings;
     customSoundsDir: string;
 
     // ── Shortcut Config ──────────────────────────────────────────────────
     shortcutMode: ShortcutMode;
-    // Note: Modifier keys are now stored in Page objects
 
     // ── Library Drawer ───────────────────────────────────────────────────
     libraryOpen: boolean;
@@ -66,10 +60,7 @@ interface SoundboardState {
     setActivePage: (pageId: string) => void;
 
     // Audio
-    setMonitorDevice: (deviceId: string) => void;
-    setOutputDevice: (deviceId: string) => void;
-    setMonitorVolume: (volume: number) => void;
-    setOutputVolume: (volume: number) => void;
+    setAudioSettings: (settings: Partial<AudioSettings>) => void;
     setCustomSoundsDir: (dir: string) => void;
 
     // Active sounds
@@ -92,6 +83,27 @@ interface SoundboardState {
     getUsedSoundIds: () => Set<string>;
 }
 
+// Debounce helper for storage
+const debounce = (fn: Function, ms: number) => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    return (...args: any[]) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), ms);
+    };
+};
+
+// Custom storage with debounce
+const debouncedStorage = {
+    getItem: (name: string) => {
+        const item = localStorage.getItem(name);
+        return item ? JSON.parse(item) : null;
+    },
+    setItem: debounce((name: string, value: any) => {
+        localStorage.setItem(name, JSON.stringify(value));
+    }, 1000), // 1 second debounce
+    removeItem: (name: string) => localStorage.removeItem(name),
+};
+
 export const useSoundboardStore = create<SoundboardState>()(
     persist(
         (set, get) => ({
@@ -100,10 +112,16 @@ export const useSoundboardStore = create<SoundboardState>()(
             pages: [],
             activePageId: '',
             activeSounds: new Set<string>(),
-            monitorDeviceId: '',
-            outputDeviceId: '',
-            monitorVolume: 1.0,
-            outputVolume: 0.5,
+
+            audioSettings: {
+                monitorVolume: 1.0,
+                outputVolume: 0.5,
+                monitorMuted: false,
+                outputMuted: false,
+                monitorDeviceId: '',
+                outputDeviceId: '',
+            },
+
             customSoundsDir: '',
             shortcutMode: 'numpad',
             libraryOpen: false,
@@ -119,7 +137,6 @@ export const useSoundboardStore = create<SoundboardState>()(
                 set((state) => {
                     const newLibrary = { ...state.library };
                     delete newLibrary[soundId];
-                    // Also remove from any grid slots
                     const newGrid = { ...state.grid };
                     for (const [key, val] of Object.entries(newGrid)) {
                         if (val === soundId) {
@@ -175,7 +192,6 @@ export const useSoundboardStore = create<SoundboardState>()(
                     const newPages = [...state.pages, newPage];
                     return {
                         pages: newPages,
-                        // If it's the first page, make it active
                         activePageId: state.pages.length === 0 ? newPage.id : state.activePageId,
                     };
                 }),
@@ -183,13 +199,11 @@ export const useSoundboardStore = create<SoundboardState>()(
             removePage: (pageId) =>
                 set((state) => {
                     const newPages = state.pages.filter((p) => p.id !== pageId);
-                    // If we removed the active page, switch to another
                     let newActiveId = state.activePageId;
                     if (pageId === state.activePageId) {
                         newActiveId = newPages.length > 0 ? newPages[0].id : '';
                     }
 
-                    // Remove grid entries for this page
                     const newGrid = { ...state.grid };
                     for (const key of Object.keys(newGrid)) {
                         if (key.startsWith(`${pageId}-`)) {
@@ -223,10 +237,11 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             // ── Audio ────────────────────────────────────────────────────────
 
-            setMonitorDevice: (deviceId) => set({ monitorDeviceId: deviceId }),
-            setOutputDevice: (deviceId) => set({ outputDeviceId: deviceId }),
-            setMonitorVolume: (volume) => set({ monitorVolume: Math.max(0, Math.min(1, volume)) }),
-            setOutputVolume: (volume) => set({ outputVolume: Math.max(0, Math.min(1, volume)) }),
+            setAudioSettings: (updates) =>
+                set((state) => ({
+                    audioSettings: { ...state.audioSettings, ...updates },
+                })),
+
             setCustomSoundsDir: (dir) => set({ customSoundsDir: dir }),
 
             // ── Active Sounds ────────────────────────────────────────────────
@@ -303,110 +318,47 @@ export const useSoundboardStore = create<SoundboardState>()(
         }),
         {
             name: 'opensoundboard-storage',
-            version: 3,
-            storage: {
-                getItem: (name) => {
-                    const raw = localStorage.getItem(name);
-                    if (!raw) return null;
-                    const parsed = JSON.parse(raw);
-                    if (parsed?.state?.activeSounds) {
-                        parsed.state.activeSounds = new Set(parsed.state.activeSounds);
-                    }
-                    return parsed;
-                },
-                setItem: (name, value) => {
-                    const toStore = {
-                        ...value,
-                        state: {
-                            ...value.state,
-                            activeSounds: Array.from(value.state.activeSounds || []),
-                        },
-                    };
-                    localStorage.setItem(name, JSON.stringify(toStore));
-                },
-                removeItem: (name) => localStorage.removeItem(name),
-            },
+            version: 5, // Bump version to clear bad activeSounds state
+            storage: createJSONStorage(() => debouncedStorage),
             migrate: (persistedState: any, version: number) => {
                 let state = persistedState;
-                const DEFAULT_PAGE_MODIFIERS: Record<number, string> = {
-                    0: 'Ctrl',
-                    1: 'Alt',
-                    2: 'Shift',
-                    3: 'Ctrl+Alt',
-                    4: 'Ctrl+Shift',
-                    5: 'Alt+Shift',
-                    6: 'Ctrl+Alt+Shift',
-                    7: 'Meta',
-                    8: 'Meta+Shift',
-                    9: 'Meta+Alt',
-                };
 
-                // Migration v1 -> v2
-                if (version === 0 || version === 1) {
-                    const oldSounds = state?.sounds || {};
-                    const library: Record<string, Sound> = {};
-                    const grid: Record<string, string | null> = {};
-
-                    for (const [key, oldSound] of Object.entries(oldSounds)) {
-                        const s = oldSound as any;
-                        const newId = uuidv4();
-                        const migrated: Sound = {
-                            id: newId,
-                            originalName: s.name || 'Unknown',
-                            displayName: s.name || 'Unknown',
-                            filePath: s.filePath || '',
-                            volume: 1.0,
-                            trimStart: 0,
-                            trimEnd: 0,
-                            playbackMode: s.playbackMode || 'one-shot',
-                            createdAt: Date.now(),
-                        };
-                        library[newId] = migrated;
-                        grid[key] = newId;
-                    }
+                // Migration v3 -> v4 (Audio Settings)
+                if (version <= 3) {
+                    const monitorVolume = typeof state.monitorVolume === 'number' ? state.monitorVolume : 1.0;
+                    const outputVolume = typeof state.outputVolume === 'number' ? state.outputVolume : 0.5;
+                    const monitorDeviceId = state.monitorDeviceId || '';
+                    const outputDeviceId = state.outputDeviceId || '';
 
                     state = {
                         ...state,
-                        library,
-                        grid,
-                        sounds: undefined,
-                        shortcutMode: 'numpad',
-                        libraryOpen: false,
-                        pageModifiers: DEFAULT_PAGE_MODIFIERS,
+                        audioSettings: {
+                            monitorVolume,
+                            outputVolume,
+                            monitorMuted: false,
+                            outputMuted: false,
+                            monitorDeviceId,
+                            outputDeviceId,
+                        },
+                        monitorVolume: undefined,
+                        outputVolume: undefined,
+                        monitorDeviceId: undefined,
+                        outputDeviceId: undefined,
                     };
                 }
 
-                // Migration v2 -> v3
-                if (version <= 2) {
-                    const pages: Page[] = [];
-                    const newGrid: Record<string, string | null> = {};
-                    const oldGrid = state.grid || {};
-
-                    for (let i = 0; i < 10; i++) {
-                        const pageId = uuidv4();
-                        pages.push({
-                            id: pageId,
-                            name: `Page ${i + 1}`,
-                            order: i,
-                            modifierKeys: [],
-                        });
-
-                        for (let slot = 0; slot < 9; slot++) {
-                            const oldKey = `${i}-${slot}`;
-                            if (oldGrid[oldKey]) {
-                                newGrid[`${pageId}-${slot}`] = oldGrid[oldKey];
-                            }
-                        }
-                    }
-
-                    return {
-                        ...state,
-                        grid: newGrid,
-                        pages,
-                        activePageId: pages[0]?.id || '',
-                        currentPage: undefined,
-                        pageModifiers: undefined,
-                    };
+                // Migration v4 -> v5 (Fix activeSounds Set persistence)
+                if (version <= 4) {
+                    // activeSounds should not be persisted. Ensure it's cleared.
+                    // We can't return a Set here because this object is merged with initial state? 
+                    // No, migrate returns the *persisted* chunk. 
+                    // If we return it without activeSounds, the initial state (new Set) will be used? 
+                    // Actually, zustand persist merge implementation: state = { ...get(), ...migratedState }
+                    // So if we remove it from here, the default `activeSounds: new Set()` from initial state will be overwritten?
+                    // Wait, default merge is `deep` or `shallow`?
+                    // Default merge: `return { ...state, ...persistedState }`
+                    // So if we REMOVE activeSounds from persistedState, the `new Set()` from initial state (which is in `state`) will be preserved.
+                    delete state.activeSounds;
                 }
 
                 return state;
@@ -416,11 +368,19 @@ export const useSoundboardStore = create<SoundboardState>()(
                 grid: state.grid,
                 pages: state.pages,
                 activePageId: state.activePageId,
-                monitorDeviceId: state.monitorDeviceId,
-                outputDeviceId: state.outputDeviceId,
+                audioSettings: state.audioSettings,
                 shortcutMode: state.shortcutMode,
-                activeSounds: state.activeSounds,
+                // activeSounds: state.activeSounds, // DO NOT PERSIST SETS
+                customSoundsDir: state.customSoundsDir,
             }),
+            merge: (persistedState: any, currentState) => {
+                // Custom merge to ensure activeSounds is always a Set
+                return {
+                    ...currentState,
+                    ...persistedState,
+                    activeSounds: new Set(), // Always reset active sounds on reload
+                };
+            },
         }
     )
 );
