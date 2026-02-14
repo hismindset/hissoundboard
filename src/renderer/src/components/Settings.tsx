@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useSoundboardStore } from '../lib/store';
+import { AudioSetupWizard } from './AudioSetupWizard';
 
-const Settings: React.FC = () => {
+const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // New Audio Settings Slice
     const audioSettings = useSoundboardStore((s) => s.audioSettings);
     const setAudioSettings = useSoundboardStore((s) => s.setAudioSettings);
+
+    // Local state for devices
+    const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+    const [showWizard, setShowWizard] = useState(false);
 
     const customSoundsDir = useSoundboardStore((s) => s.customSoundsDir);
     const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
 
-    const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [serverUrl, setServerUrl] = useState<string>('');
     const [defaultSoundsDir, setDefaultSoundsDir] = useState<string>('');
@@ -98,11 +102,18 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Output */}
-                <div>
-                    <label className="block text-xs text-surface-300 mb-1.5">
-                        🎧 Output Device (Virtual Cable)
-                    </label>
+                {/* Output Device (Cable) */}
+                <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-2">
+                        <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Output Device (To Mic)</label>
+                        <button
+                            onClick={() => setShowWizard(true)}
+                            className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs font-bold hover:bg-violet-500 hover:text-white transition-colors"
+                            title="Help me setup virtual audio"
+                        >
+                            ?
+                        </button>
+                    </div>
                     <select
                         value={audioSettings.outputDeviceId}
                         onChange={(e) => setAudioSettings({ outputDeviceId: e.target.value })}
@@ -226,6 +237,8 @@ const Settings: React.FC = () => {
                         </a>
                     </div>
                 </div>
+
+                {showWizard && <AudioSetupWizard onClose={() => setShowWizard(false)} />}
             </div>
         </div>
     );

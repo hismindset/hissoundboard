@@ -38,6 +38,9 @@ interface SoundboardState {
     // ── Library Drawer ───────────────────────────────────────────────────
     libraryOpen: boolean;
 
+    // ── First Run Setup ──────────────────────────────────────────────────
+    hasCompletedSetup: boolean;
+
     // ── Actions ──────────────────────────────────────────────────────────
 
     // Library
@@ -74,6 +77,9 @@ interface SoundboardState {
     // Library drawer
     setLibraryOpen: (open: boolean) => void;
     toggleLibrary: () => void;
+
+    // Setup
+    setHasCompletedSetup: (completed: boolean) => void;
 
     // Remote
     getAllSoundsForRemote: () => { pages: Partial<Page>[]; activePageId: string; sounds: { pageId: string; slot: number; sound: Sound }[] };
@@ -125,6 +131,7 @@ export const useSoundboardStore = create<SoundboardState>()(
             customSoundsDir: '',
             shortcutMode: 'numpad',
             libraryOpen: false,
+            hasCompletedSetup: false,
 
             // ── Library Actions ──────────────────────────────────────────────
 
@@ -271,6 +278,9 @@ export const useSoundboardStore = create<SoundboardState>()(
             setLibraryOpen: (open) => set({ libraryOpen: open }),
             toggleLibrary: () => set((state) => ({ libraryOpen: !state.libraryOpen })),
 
+            // ── Setup ────────────────────────────────────────────────────────
+            setHasCompletedSetup: (completed) => set({ hasCompletedSetup: completed }),
+
             // ── Remote ───────────────────────────────────────────────────────
 
             getAllSoundsForRemote: () => {
@@ -376,6 +386,7 @@ export const useSoundboardStore = create<SoundboardState>()(
                 shortcutMode: state.shortcutMode,
                 // activeSounds: state.activeSounds, // DO NOT PERSIST SETS
                 customSoundsDir: state.customSoundsDir,
+                hasCompletedSetup: state.hasCompletedSetup,
             }),
             merge: (persistedState: any, currentState) => {
                 // Custom merge to ensure activeSounds is always a Set

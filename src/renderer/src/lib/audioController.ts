@@ -30,6 +30,38 @@ class AudioController {
         this.updateActiveSounds();
     }
 
+    setMonitorVolume(volume: number) {
+        this.settings.monitorVolume = volume;
+        this.updateAllActiveVolumes();
+    }
+
+    setOutputVolume(volume: number) {
+        this.settings.outputVolume = volume;
+        this.updateAllActiveVolumes();
+    }
+
+    setMonitorMuted(muted: boolean) {
+        this.settings.monitorMuted = muted;
+        this.updateAllActiveVolumes();
+    }
+
+    setOutputMuted(muted: boolean) {
+        this.settings.outputMuted = muted;
+        this.updateAllActiveVolumes();
+    }
+
+    setMonitorDevice(deviceId: string) {
+        this.settings.monitorDeviceId = deviceId;
+        // logic to update running sounds device? 
+        // For now, let's just update settings. sounds will pick it up on next play or via updateActiveSounds if we implement it fully.
+        // But updateActiveSounds in its current state doesn't look like it reapplies sinkId.
+        // Let's rely on init/next play for now, or improve updateActiveSounds.
+    }
+
+    setOutputDevice(deviceId: string) {
+        this.settings.outputDeviceId = deviceId;
+    }
+
     /** Update volume/device for all currently playing sounds */
     private async updateActiveSounds() {
         for (const [soundId, elements] of this.activeSounds.entries()) {

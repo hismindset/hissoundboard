@@ -1,36 +1,81 @@
 # OpenSoundBoard
 
-A modern, dark-themed soundboard application built with Electron, React, and TypeScript. Features dual audio output (monitor + voice chat), global shortcuts, and remote control via mobile web interface.
+A modern, open-source soundboard application built with Electron, React, and TypeScript. Designed for gamers, streamers, and podcasters, it features dual audio output (monitor + voice chat), global hotkeys, dynamic pages, and a mobile remote control.
 
-## Installation & Running
+## ✨ Features
 
-### Windows
-- **Installer:** Download `OpenSoundBoard-Setup.exe`. Run it to install.
-- **Portable:** Download the `.zip` file, extract it, and run `OpenSoundBoard.exe`.
+- **Dynamic Pages**: Create, rename, delete, and organize your sounds across unlimited pages.
+- **Dual Audio Output**: Route sounds to your headphones (Monitor) and a virtual cable (Output) simultaneously with independent volume controls.
+- **Global Hotkeys**: Trigger sounds from anywhere, even when the app is minimized. Supports modifiers (Ctrl, Alt, Shift).
+- **Remote Control**: Control your soundboard from any phone or tablet on your local network. Now supports page navigation!
+- **Audio Setup Wizard**: Built-in guide to help you configure virtual audio devices on Windows, macOS, and Linux.
+- **Smart Drag & Drop**: Easily add sounds to your library and arrange them on the grid.
+- **Dark Mode UI**: Sleek, gaming-inspired interface.
 
-### macOS
-- **Installer:** Download the `.dmg` file. Open it and drag `OpenSoundBoard` to the Applications folder.
-- **Portable:** Download the `.zip` file, extract, and run.
+---
 
-> **Note:** Since this app is not signed with an Apple Developer ID, macOS will quarantine it and show an "App is damaged" error. To run it:
+## 🚀 Installation & Setup
 
-1. Install the app to your `/Applications` folder (via DMG drag-and-drop or by moving the extracted app).
-2. Open Terminal and run:
-   ```bash
-   xattr -cr /Applications/OpenSoundBoard.app
-   ```
-   *(Or use the included `./fix_mac_app.sh` script)*
-3. Run the app normally.
+### 1. Prerequisites (Virtual Audio)
+To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Audio Device**. OpenSoundBoard acts as a source, playing audio into this "virtual microphone".
 
+| OS | Recommended Software | Link |
+| :--- | :--- | :--- |
+| **Windows** | VB-Cable (Free) | [Download](https://vb-audio.com/Cable/) |
+| **macOS** | BlackHole (Free) | [Download](https://github.com/ExistentialAudio/BlackHole) |
+| **Linux** | PulseAudio Null Sink | *Built-in (App provides auto-setup)* |
 
-### Linux
-- **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i OpenSoundBoard*.deb`.
-- **Fedora/RHEL:** Download the `.rpm` file and install.
-- **Portable:** Download the `.zip`, extract, and run the executable.
+**After installing:**
+1. Open **OpenSoundBoard Settings** (or use the Setup Wizard).
+2. Set **Output Device** to *CABLE Input* (Windows) or *BlackHole* (macOS).
+3. In your Voice Chat App (e.g., Discord), set **Input Device** to *CABLE Output* or *BlackHole*.
 
-## Features
-- **Dual Audio Output**: Route sounds to your headphones and a virtual cable (for Discord/Teamspeak) simultaneously with independent volume controls.
-- **Global Shortcuts**: Trigger sounds even when the app is minimized.
-- **Remote Control**: Control the board from any device on your local network/Wi-Fi.
-- **Custom Sounds Directory**: Store your sound library anywhere.
-- **Drag & Drop**: Add sounds easily to the library and grid.
+### 2. Install the App
+
+#### Windows
+- **Installer:** Download `OpenSoundBoard-Setup.exe` and run it.
+- **Portable:** Download the `.zip`, extract, and run `OpenSoundBoard.exe`.
+
+#### macOS
+- **Installer:** Download the `.dmg`, open it, and drag `OpenSoundBoard` to Applications.
+- **Portable:** Download the `.zip`, extract, and run.
+
+> **Note:** Since this app is not signed with an Apple Developer ID, you may need to run this command if it says "App is damaged":
+> ```bash
+> xattr -cr /Applications/OpenSoundBoard.app
+> ```
+
+#### Linux
+- **Debian/Ubuntu:** Download `.deb` and run `sudo dpkg -i OpenSoundBoard*.deb`.
+- **Fedora/RHEL:** Download `.rpm` and install.
+- **AppImage:** Download `.AppImage`, make it executable (`chmod +x`), and run.
+
+---
+
+## 📱 Remote Control
+1. Open **Settings** in the desktop app.
+2. Scan the **QR Code** or enter the IP address on your phone's browser.
+3. You can now tap sounds and switch pages from your mobile device!
+
+## ⌨️ Shortcuts
+- **Click**: Play Sound
+- **Right-Click**: Edit Sound / Assign Key
+- **Stop All**: Stop all currently playing sounds.
+
+## 🛠️ Development
+
+### Setup
+```bash
+npm install
+```
+
+### Run Locally
+```bash
+npm start
+```
+
+### Build
+```bash
+npm run build
+```
+Build artifacts will be in the `dist` folder.

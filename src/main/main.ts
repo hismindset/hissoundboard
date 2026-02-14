@@ -371,6 +371,24 @@ const setupIpcHandlers = () => {
         }
     });
 
+    // Linux Virtual Sink
+    ipcMain.handle('create-virtual-sink', async () => {
+        if (process.platform !== 'linux') return { success: false, error: 'Not supported on this OS' };
+
+        const { exec } = require('child_process');
+        return new Promise((resolve) => {
+            exec('pactl load-module module-null-sink sink_name=OpenSoundBoard sink_properties=device.description="OpenSoundBoard_Output"', (err, stdout, stderr) => {
+                if (err) {
+                    console.error('Failed to create sink:', stderr);
+                    resolve({ success: false, error: stderr || err.message });
+                } else {
+                    console.log('Created virtual sink:', stdout);
+                    resolve({ success: true, id: stdout.trim() });
+                }
+            });
+        });
+    });
+
     // Receive shortcut configuration
     ipcMain.on('set-shortcut-config', (_event, config) => {
         shortcutConfig = {

@@ -4,12 +4,13 @@ import PageList from './components/PageList';
 import Settings from './components/Settings';
 import Library from './components/Library';
 import SoundEditor from './components/SoundEditor';
+import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
 
 type View = 'grid' | 'settings';
 
-function App() {
+const App: React.FC = () => {
     const [view, setView] = useState<View>('grid');
     const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
 
@@ -29,6 +30,8 @@ function App() {
         monitorDeviceId: '',
         outputDeviceId: ''
     });
+    const setAudioSettings = useSoundboardStore((s) => s.setAudioSettings);
+    const hasCompletedSetup = useSoundboardStore((s) => s.hasCompletedSetup);
 
     const setActive = useSoundboardStore((s) => s.setActive);
     const setInactive = useSoundboardStore((s) => s.setInactive);
@@ -37,21 +40,51 @@ function App() {
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
 
-    // Initialize AudioController
+    // Init Audio Controller with saved settings
     useEffect(() => {
-        if (audioSettings) {
-            audioController.init(audioSettings);
+        audioController.setMonitorVolume(audioSettings.monitorVolume);
+        audioController.setOutputVolume(audioSettings.outputVolume);
+        audioController.setMonitorMuted(audioSettings.monitorMuted);
+        audioController.setOutputMuted(audioSettings.outputMuted);
+
+        if (audioSettings.monitorDeviceId) {
+            audioController.setMonitorDevice(audioSettings.monitorDeviceId);
+        }
+        if (audioSettings.outputDeviceId) {
+            audioController.setOutputDevice(audioSettings.outputDeviceId);
         }
     }, []);
 
-    // Sync settings updates to AudioController
+    // Subscribe to store changes to update AudioController in real-time
     useEffect(() => {
-        if (audioSettings) {
-            audioController.updateSettings(audioSettings);
-            // Only update active volumes if settings exist
-            audioController.updateAllActiveVolumes();
+        const unsub = useSoundboardStore.subscribe((state, prevState) => {
+            if (state.audioSettings !== prevState.audioSettings) {
+                const s = state.audioSettings;
+                audioController.setMonitorVolume(s.monitorVolume);
+                audioController.setOutputVolume(s.outputVolume);
+                audioController.setMonitorMuted(s.monitorMuted);
+                audioController.setOutputMuted(s.outputMuted);
+
+                if (s.monitorDeviceId !== prevState.audioSettings.monitorDeviceId) {
+                    audioController.setMonitorDevice(s.monitorDeviceId);
+                }
+                if (s.outputDeviceId !== prevState.audioSettings.outputDeviceId) {
+                    audioController.setOutputDevice(s.outputDeviceId);
+                }
+            }
+        });
+        return unsub;
+    }, []);
+
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [showWizard, setShowWizard] = useState(false);
+
+    // Show wizard on first run if not completed
+    useEffect(() => {
+        if (!hasCompletedSetup) {
+            setShowWizard(true);
         }
-    }, [audioSettings]);
+    }, [hasCompletedSetup]);
 
     const handleEditSound = useCallback((soundId: string) => {
         setEditingSoundId(soundId);
