@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSoundboardStore } from '../lib/store';
 
 const Settings: React.FC = () => {
@@ -14,8 +14,8 @@ const Settings: React.FC = () => {
     const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
-    const pageModifiers = useSoundboardStore((s) => s.pageModifiers);
-    const setPageModifier = useSoundboardStore((s) => s.setPageModifier);
+    // pageModifiers removed from store
+    // const pages = useSoundboardStore((s) => s.pages); // Not needed here anymore
 
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -47,17 +47,6 @@ const Settings: React.FC = () => {
             );
         });
     }, []);
-
-    const sendShortcutConfig = useCallback(() => {
-        window.api.setShortcutConfig?.({
-            mode: shortcutMode,
-            pageModifiers,
-        });
-    }, [shortcutMode, pageModifiers]);
-
-    useEffect(() => {
-        sendShortcutConfig();
-    }, [sendShortcutConfig]);
 
     // Sync custom sounds dir to main process
     useEffect(() => {
@@ -211,34 +200,8 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Per-Page Modifiers */}
-                <div>
-                    <label className="block text-xs text-surface-300 mb-2">
-                        Seiten-Modifikatoren
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {Array.from({ length: 10 }, (_, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                                <span className="text-[10px] text-surface-400 w-10">
-                                    Seite {i + 1}
-                                </span>
-                                <select
-                                    value={pageModifiers[i] || 'Ctrl'}
-                                    onChange={(e) => setPageModifier(i, e.target.value)}
-                                    className="flex-1 px-2 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 focus:outline-none focus:border-accent/50 transition-colors"
-                                >
-                                    <option value="Ctrl">Ctrl</option>
-                                    <option value="RCtrl">Right Ctrl</option>
-                                    <option value="Alt">Alt</option>
-                                    <option value="Shift">Shift</option>
-                                    <option value="Ctrl+Alt">Ctrl+Alt</option>
-                                    <option value="Ctrl+Shift">Ctrl+Shift</option>
-                                    <option value="Alt+Shift">Alt+Shift</option>
-                                    <option value="Meta">Meta (⌘/Win)</option>
-                                </select>
-                            </div>
-                        ))}
-                    </div>
+                <div className="text-xs text-surface-400 bg-surface-800/50 p-3 rounded-lg">
+                    Page modifiers are now managed in the Page Sidebar.
                 </div>
 
                 {/* Reference */}

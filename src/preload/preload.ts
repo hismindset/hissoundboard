@@ -1,13 +1,19 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron';
 
 export interface TriggerSoundPayload {
-    page: number;
+    page?: number; // Legacy index support
+    pageId?: string; // New ID support
     slot: number;
+}
+
+export interface PageConfig {
+    id: string;
+    modifierKeys: number[];
 }
 
 export interface ShortcutConfig {
     mode: 'numpad' | 'standard';
-    pageModifiers: Record<number, string>;
+    pages: PageConfig[];
 }
 
 const api = {
@@ -36,6 +42,13 @@ const api = {
             ipcRenderer.removeListener('request-sounds-for-remote', handler);
     },
 
+    /** Receive recorded key codes from main process */
+    onKeyRecorded: (callback: (keyCode: number) => void) => {
+        const handler = (_event: IpcRendererEvent, keyCode: number) => callback(keyCode);
+        ipcRenderer.on('key-recorded', handler);
+        return () => ipcRenderer.removeListener('key-recorded', handler);
+    },
+
     // ─── Renderer → Main Invocations ─────────────────────────────────────────
 
     /** Copy a dropped sound file to the app's sounds directory */
@@ -59,12 +72,18 @@ const api = {
     /** Set custom sounds directory */
     setSoundsDir: (dir: string) => ipcRenderer.send('set-sounds-dir', dir),
 
-    // ─── Shortcut Config ─────────────────────────────────────────────────────
+    // ─── Shortcut Config & Recording ─────────────────────────────────────────
 
     /** Send shortcut configuration to main process */
     setShortcutConfig: (config: ShortcutConfig) => {
         ipcRenderer.send('set-shortcut-config', config);
     },
+
+    /** Start listening for keys to record */
+    startRecordingKeys: () => ipcRenderer.send('start-recording-keys'),
+
+    /** Stop listening for keys */
+    stopRecordingKeys: () => ipcRenderer.send('stop-recording-keys'),
 
     // ─── Renderer → Main Sends ───────────────────────────────────────────────
 

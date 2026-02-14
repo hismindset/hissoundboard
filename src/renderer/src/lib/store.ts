@@ -1,12 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { v4 as uuidv4 } from 'uuid';
 import type { Sound, GridSlot } from '../types/sound';
+import type { Page } from '../types/page';
 
-const SLOTS_PER_PAGE = 9;
-const NUM_PAGES = 10;
-
-/** "page-slot" key */
-const slotKey = (page: number, slot: number) => `${page}-${slot}`;
+/** "pageId-slotIndex" */
+const slotKey = (pageId: string, slot: number) => `${pageId}-${slot}`;
 
 export type ShortcutMode = 'numpad' | 'standard';
 
@@ -16,11 +15,14 @@ interface SoundboardState {
     library: Record<string, Sound>;
 
     // ── Grid (view references) ───────────────────────────────────────────
-    /** "page-slot" → Sound UUID or null */
+    /** "pageId-slotIndex" → Sound UUID or null */
     grid: Record<string, GridSlot>;
 
-    /** Currently visible page (0-based) */
-    currentPage: number;
+    /** List of dynamic pages */
+    pages: Page[];
+
+    /** ID of the currently visible page */
+    activePageId: string;
 
     /** Set of sound UUIDs currently playing/looping */
     activeSounds: Set<string>;
@@ -37,8 +39,7 @@ interface SoundboardState {
 
     // ── Shortcut Config ──────────────────────────────────────────────────
     shortcutMode: ShortcutMode;
-    /** Map of page index → modifier key name (e.g. 0 → "Ctrl", 1 → "Alt") */
-    pageModifiers: Record<number, string>;
+    // Note: Modifier keys are now stored in Page objects
 
     // ── Library Drawer ───────────────────────────────────────────────────
     libraryOpen: boolean;
@@ -52,14 +53,17 @@ interface SoundboardState {
     getSoundById: (soundId: string) => Sound | undefined;
 
     // Grid
-    assignToSlot: (page: number, slot: number, soundId: string) => void;
-    unassignSlot: (page: number, slot: number) => void;
-    getSoundAtSlot: (page: number, slot: number) => Sound | undefined;
+    assignToSlot: (pageId: string, slot: number, soundId: string) => void;
+    unassignSlot: (pageId: string, slot: number) => void;
+    getSoundAtSlot: (pageId: string, slot: number) => Sound | undefined;
 
     // Pages
-    setCurrentPage: (page: number) => void;
-    nextPage: () => void;
-    prevPage: () => void;
+    addPage: (name?: string) => void;
+    removePage: (pageId: string) => void;
+    renamePage: (pageId: string, name: string) => void;
+    updatePageOrder: (pages: Page[]) => void;
+    setPageModifier: (pageId: string, modifierKeys: number[]) => void;
+    setActivePage: (pageId: string) => void;
 
     // Audio
     setMonitorDevice: (deviceId: string) => void;
@@ -75,40 +79,26 @@ interface SoundboardState {
 
     // Shortcuts
     setShortcutMode: (mode: ShortcutMode) => void;
-    setPageModifier: (page: number, modifier: string) => void;
 
     // Library drawer
     setLibraryOpen: (open: boolean) => void;
     toggleLibrary: () => void;
 
     // Remote
-    getAllSoundsForRemote: () => { page: number; slot: number; sound: Sound }[];
+    getAllSoundsForRemote: () => { pageIndex: number; pageId: string; slot: number; sound: Sound }[];
 
     // Utility
     getUnusedSounds: () => Sound[];
     getUsedSoundIds: () => Set<string>;
 }
 
-// ── Default page modifiers ───────────────────────────────────────────────────
-const DEFAULT_PAGE_MODIFIERS: Record<number, string> = {
-    0: 'Ctrl',
-    1: 'Alt',
-    2: 'Shift',
-    3: 'Ctrl+Alt',
-    4: 'Ctrl+Shift',
-    5: 'Alt+Shift',
-    6: 'Ctrl+Alt+Shift',
-    7: 'Meta',
-    8: 'Meta+Shift',
-    9: 'Meta+Alt',
-};
-
 export const useSoundboardStore = create<SoundboardState>()(
     persist(
         (set, get) => ({
             library: {},
             grid: {},
-            currentPage: 0,
+            pages: [],
+            activePageId: '',
             activeSounds: new Set<string>(),
             monitorDeviceId: '',
             outputDeviceId: '',
@@ -116,7 +106,6 @@ export const useSoundboardStore = create<SoundboardState>()(
             outputVolume: 0.5,
             customSoundsDir: '',
             shortcutMode: 'numpad',
-            pageModifiers: { ...DEFAULT_PAGE_MODIFIERS },
             libraryOpen: false,
 
             // ── Library Actions ──────────────────────────────────────────────
@@ -156,36 +145,81 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             // ── Grid Actions ─────────────────────────────────────────────────
 
-            assignToSlot: (page, slot, soundId) =>
+            assignToSlot: (pageId, slot, soundId) =>
                 set((state) => ({
-                    grid: { ...state.grid, [slotKey(page, slot)]: soundId },
+                    grid: { ...state.grid, [slotKey(pageId, slot)]: soundId },
                 })),
 
-            unassignSlot: (page, slot) =>
+            unassignSlot: (pageId, slot) =>
                 set((state) => ({
-                    grid: { ...state.grid, [slotKey(page, slot)]: null },
+                    grid: { ...state.grid, [slotKey(pageId, slot)]: null },
                 })),
 
-            getSoundAtSlot: (page, slot) => {
+            getSoundAtSlot: (pageId, slot) => {
                 const state = get();
-                const soundId = state.grid[slotKey(page, slot)];
+                const soundId = state.grid[slotKey(pageId, slot)];
                 if (!soundId) return undefined;
                 return state.library[soundId];
             },
 
             // ── Page Actions ─────────────────────────────────────────────────
 
-            setCurrentPage: (page) => set({ currentPage: page }),
+            addPage: (name = 'New Page') =>
+                set((state) => {
+                    const newPage: Page = {
+                        id: uuidv4(),
+                        name,
+                        order: state.pages.length,
+                        modifierKeys: [],
+                    };
+                    const newPages = [...state.pages, newPage];
+                    return {
+                        pages: newPages,
+                        // If it's the first page, make it active
+                        activePageId: state.pages.length === 0 ? newPage.id : state.activePageId,
+                    };
+                }),
 
-            nextPage: () =>
+            removePage: (pageId) =>
+                set((state) => {
+                    const newPages = state.pages.filter((p) => p.id !== pageId);
+                    // If we removed the active page, switch to another
+                    let newActiveId = state.activePageId;
+                    if (pageId === state.activePageId) {
+                        newActiveId = newPages.length > 0 ? newPages[0].id : '';
+                    }
+
+                    // Remove grid entries for this page
+                    const newGrid = { ...state.grid };
+                    for (const key of Object.keys(newGrid)) {
+                        if (key.startsWith(`${pageId}-`)) {
+                            delete newGrid[key];
+                        }
+                    }
+
+                    return {
+                        pages: newPages,
+                        activePageId: newActiveId,
+                        grid: newGrid,
+                    };
+                }),
+
+            renamePage: (pageId, name) =>
                 set((state) => ({
-                    currentPage: (state.currentPage + 1) % NUM_PAGES,
+                    pages: state.pages.map((p) => (p.id === pageId ? { ...p, name } : p)),
                 })),
 
-            prevPage: () =>
-                set((state) => ({
-                    currentPage: (state.currentPage - 1 + NUM_PAGES) % NUM_PAGES,
+            updatePageOrder: (newPages) =>
+                set(() => ({
+                    pages: newPages.map((p, index) => ({ ...p, order: index })),
                 })),
+
+            setPageModifier: (pageId, modifierKeys) =>
+                set((state) => ({
+                    pages: state.pages.map((p) => (p.id === pageId ? { ...p, modifierKeys } : p)),
+                })),
+
+            setActivePage: (pageId) => set({ activePageId: pageId }),
 
             // ── Audio ────────────────────────────────────────────────────────
 
@@ -217,11 +251,6 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             setShortcutMode: (mode) => set({ shortcutMode: mode }),
 
-            setPageModifier: (page, modifier) =>
-                set((state) => ({
-                    pageModifiers: { ...state.pageModifiers, [page]: modifier },
-                })),
-
             // ── Library Drawer ───────────────────────────────────────────────
 
             setLibraryOpen: (open) => set({ libraryOpen: open }),
@@ -231,18 +260,24 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             getAllSoundsForRemote: () => {
                 const state = get();
-                const result: { page: number; slot: number; sound: Sound }[] = [];
-                for (const [key, soundId] of Object.entries(state.grid)) {
-                    if (!soundId) continue;
-                    const sound = state.library[soundId];
-                    if (!sound) continue;
-                    const [pageStr, slotStr] = key.split('-');
-                    result.push({
-                        page: parseInt(pageStr),
-                        slot: parseInt(slotStr),
-                        sound,
-                    });
-                }
+                const result: { pageIndex: number; pageId: string; slot: number; sound: Sound }[] = [];
+
+                state.pages.forEach((page, pageIndex) => {
+                    for (let slot = 0; slot < 9; slot++) {
+                        const soundId = state.grid[slotKey(page.id, slot)];
+                        if (soundId) {
+                            const sound = state.library[soundId];
+                            if (sound) {
+                                result.push({
+                                    pageIndex,
+                                    pageId: page.id,
+                                    slot,
+                                    sound
+                                });
+                            }
+                        }
+                    }
+                });
                 return result;
             },
 
@@ -268,8 +303,7 @@ export const useSoundboardStore = create<SoundboardState>()(
         }),
         {
             name: 'opensoundboard-storage',
-            version: 2,
-            // Serialize/deserialize Set<string>
+            version: 3,
             storage: {
                 getItem: (name) => {
                     const raw = localStorage.getItem(name);
@@ -292,18 +326,30 @@ export const useSoundboardStore = create<SoundboardState>()(
                 },
                 removeItem: (name) => localStorage.removeItem(name),
             },
-            // Migration from v1 (old flat sounds map) to v2 (library + grid)
             migrate: (persistedState: any, version: number) => {
+                let state = persistedState;
+                const DEFAULT_PAGE_MODIFIERS: Record<number, string> = {
+                    0: 'Ctrl',
+                    1: 'Alt',
+                    2: 'Shift',
+                    3: 'Ctrl+Alt',
+                    4: 'Ctrl+Shift',
+                    5: 'Alt+Shift',
+                    6: 'Ctrl+Alt+Shift',
+                    7: 'Meta',
+                    8: 'Meta+Shift',
+                    9: 'Meta+Alt',
+                };
+
+                // Migration v1 -> v2
                 if (version === 0 || version === 1) {
-                    // Old schema: sounds: Record<"page-slot", { id, name, filePath, playbackMode }>
-                    const oldSounds = persistedState?.sounds || {};
+                    const oldSounds = state?.sounds || {};
                     const library: Record<string, Sound> = {};
                     const grid: Record<string, string | null> = {};
 
                     for (const [key, oldSound] of Object.entries(oldSounds)) {
                         const s = oldSound as any;
-                        // Generate a new UUID for each old sound
-                        const newId = crypto.randomUUID ? crypto.randomUUID() : `migrated-${key}`;
+                        const newId = uuidv4();
                         const migrated: Sound = {
                             id: newId,
                             originalName: s.name || 'Unknown',
@@ -319,26 +365,60 @@ export const useSoundboardStore = create<SoundboardState>()(
                         grid[key] = newId;
                     }
 
-                    return {
-                        ...persistedState,
+                    state = {
+                        ...state,
                         library,
                         grid,
-                        sounds: undefined, // Remove old key
-                        shortcutMode: 'numpad' as ShortcutMode,
-                        pageModifiers: { ...DEFAULT_PAGE_MODIFIERS },
+                        sounds: undefined,
+                        shortcutMode: 'numpad',
                         libraryOpen: false,
+                        pageModifiers: DEFAULT_PAGE_MODIFIERS,
                     };
                 }
-                return persistedState;
+
+                // Migration v2 -> v3
+                if (version <= 2) {
+                    const pages: Page[] = [];
+                    const newGrid: Record<string, string | null> = {};
+                    const oldGrid = state.grid || {};
+
+                    for (let i = 0; i < 10; i++) {
+                        const pageId = uuidv4();
+                        pages.push({
+                            id: pageId,
+                            name: `Page ${i + 1}`,
+                            order: i,
+                            modifierKeys: [],
+                        });
+
+                        for (let slot = 0; slot < 9; slot++) {
+                            const oldKey = `${i}-${slot}`;
+                            if (oldGrid[oldKey]) {
+                                newGrid[`${pageId}-${slot}`] = oldGrid[oldKey];
+                            }
+                        }
+                    }
+
+                    return {
+                        ...state,
+                        grid: newGrid,
+                        pages,
+                        activePageId: pages[0]?.id || '',
+                        currentPage: undefined,
+                        pageModifiers: undefined,
+                    };
+                }
+
+                return state;
             },
             partialize: (state) => ({
                 library: state.library,
                 grid: state.grid,
-                currentPage: state.currentPage,
+                pages: state.pages,
+                activePageId: state.activePageId,
                 monitorDeviceId: state.monitorDeviceId,
                 outputDeviceId: state.outputDeviceId,
                 shortcutMode: state.shortcutMode,
-                pageModifiers: state.pageModifiers,
                 activeSounds: state.activeSounds,
             }),
         }

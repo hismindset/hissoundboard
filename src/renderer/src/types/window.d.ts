@@ -1,17 +1,29 @@
 export interface TriggerSoundPayload {
-    page: number;
+    page?: number;
+    pageId?: string;
     slot: number;
+}
+
+export interface PageConfig {
+    id: string;
+    modifierKeys: number[];
 }
 
 export interface ShortcutConfig {
     mode: 'numpad' | 'standard';
-    pageModifiers: Record<number, string>;
+    pages: PageConfig[];
 }
 
 interface ElectronApi {
     onTriggerSound: (callback: (payload: TriggerSoundPayload) => void) => () => void;
     onPanicStop: (callback: () => void) => () => void;
     onRequestSoundsForRemote: (callback: () => void) => () => void;
+
+    // Recording
+    onKeyRecorded: (callback: (keyCode: number) => void) => () => void;
+    startRecordingKeys: () => void;
+    stopRecordingKeys: () => void;
+
     saveSoundFile: (sourcePath: string, fileName: string) => Promise<string>;
     getLocalIp: () => Promise<{ ip: string; port: number }>;
     downloadUrl: (url: string) => Promise<string>;

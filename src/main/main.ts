@@ -6,9 +6,11 @@ import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import os from 'os';
 import https from 'https';
-import httpModule from 'http';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
+// @ts-ignore
 import squirrelStartup from 'electron-squirrel-startup';
+
+console.log('[Main] Starting OpenSoundBoard...');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (squirrelStartup) {
@@ -29,7 +31,6 @@ protocol.registerSchemesAsPrivileged([
     },
 ]);
 
-// Vite dev server URL declaration
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
@@ -51,7 +52,6 @@ const ensureSoundsDir = () => {
 // ─── Window Creation ─────────────────────────────────────────────────────────
 
 const createWindow = () => {
-    // Determine icon path based on platform
     let iconPath = path.join(__dirname, '../../resources/icon.png');
     if (process.platform === 'win32') {
         iconPath = path.join(__dirname, '../../resources/icon.ico');
@@ -73,7 +73,6 @@ const createWindow = () => {
         },
     });
 
-    // On macOS, the Dock icon might need explicit setting in dev mode
     if (process.platform === 'darwin' && MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         app.dock?.setIcon(iconPath);
     }
@@ -86,7 +85,6 @@ const createWindow = () => {
         );
     }
 
-    // Open DevTools in development
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
@@ -164,7 +162,6 @@ const getLocalIp = (): string => {
 
 // ─── uiohook-napi: Global Keyboard Hooks ──────────────────────────────────────
 
-// Key code maps for uiohook-napi
 const NUMPAD_KEY_MAP: Record<number, number> = {
     [UiohookKey.Numpad1]: 1,
     [UiohookKey.Numpad2]: 2,
@@ -189,103 +186,100 @@ const STANDARD_KEY_MAP: Record<number, number> = {
     [UiohookKey['9']]: 9,
 };
 
-// Current shortcut configuration
-let shortcutConfig = {
-    mode: 'numpad' as 'numpad' | 'standard',
-    pageModifiers: {
-        0: 'Ctrl',
-        1: 'Alt',
-        2: 'Shift',
-        3: 'Ctrl+Alt',
-        4: 'Ctrl+Shift',
-    } as Record<number, string>,
+const NUMPAD_TO_SLOT: Record<number, number> = {
+    7: 0, 8: 1, 9: 2,
+    4: 3, 5: 4, 6: 5,
+    1: 6, 2: 7, 3: 8,
 };
 
-// Track currently pressed keycodes to distinguish left/right modifiers
+// Configuration
+interface PageConfig {
+    id: string;
+    modifierKeys: number[];
+}
+
+let shortcutConfig = {
+    mode: 'numpad' as 'numpad' | 'standard',
+    pages: [] as PageConfig[],
+};
+
+// State
+let isRecording = false;
 const pressedKeys = new Set<number>();
 
-/**
- * Build possible modifier strings for the current key state.
- * Returns multiple candidates so e.g. RCtrl is tried alongside Ctrl.
- */
-function getModifierCandidates(
-    ctrlKey: boolean,
-    altKey: boolean,
-    shiftKey: boolean,
-    metaKey: boolean
-): string[] {
-    const candidates: string[] = [];
-    const isRCtrl = pressedKeys.has(UiohookKey.CtrlRight);
-
-    const parts: string[] = [];
-    if (ctrlKey) parts.push('Ctrl');
-    if (altKey) parts.push('Alt');
-    if (shiftKey) parts.push('Shift');
-    if (metaKey) parts.push('Meta');
-
-    if (parts.length === 0) return [];
-    candidates.push(parts.join('+'));
-
-    // If right ctrl is pressed, also try RCtrl variant
-    if (ctrlKey && isRCtrl) {
-        const rParts = parts.map((p) => (p === 'Ctrl' ? 'RCtrl' : p));
-        candidates.push(rParts.join('+'));
+// Helper to check if two sets of keys are identical
+const areKeysEqual = (keysA: number[], keysB: number[]) => {
+    if (keysA.length !== keysB.length) return false;
+    const setA = new Set(keysA);
+    for (const k of keysB) {
+        if (!setA.has(k)) return false;
     }
+    return true;
+};
 
-    return candidates;
-}
-
-/**
- * Find which page matches any of the given modifier strings
- */
-function getPageForModifiers(modifiers: string[]): number | null {
-    for (const [pageStr, mod] of Object.entries(shortcutConfig.pageModifiers)) {
-        if (modifiers.includes(mod)) {
-            return parseInt(pageStr);
-        }
-    }
-    return null;
-}
+// Modifier keys that we care about for filtering
+const MODIFIER_KEYS = new Set([
+    UiohookKey.Ctrl, UiohookKey.CtrlRight,
+    UiohookKey.Alt, UiohookKey.AltRight,
+    UiohookKey.Shift, UiohookKey.ShiftRight,
+    UiohookKey.Meta, UiohookKey.MetaRight,
+]);
 
 const setupGlobalHooks = () => {
     uIOhook.on('keydown', (e) => {
         pressedKeys.add(e.keycode);
 
-        // Handle Escape = Panic Stop (no modifiers needed)
+        // Recording Mode
+        if (isRecording) {
+            console.log('[Recorder] Key Pressed:', e.keycode);
+            // Allow recording ANY key for debugging, or filter?
+            // The prompt said "Only accept Modifier keys".
+            // But if user wants to use "Tab" as modifier?
+            // Let's stick to MODIFIER_KEYS filter as per requirements but log it.
+            if (MODIFIER_KEYS.has(e.keycode)) {
+                mainWindow?.webContents.send('key-recorded', e.keycode);
+            } else {
+                console.log('[Recorder] Ignored non-modifier:', e.keycode);
+            }
+            return;
+        }
+
+        // Panic Stop
         if (e.keycode === UiohookKey.Escape) {
+            console.log('[Shortcut] Panic Stop Triggered');
             mainWindow?.webContents.send('panic-stop');
             return;
         }
 
-        // Determine which key map to use
+        // Normal Trigger Logic
         const keyMap = shortcutConfig.mode === 'numpad' ? NUMPAD_KEY_MAP : STANDARD_KEY_MAP;
         const number = keyMap[e.keycode];
-        if (!number) return;
 
-        // Check modifiers
-        const modifiers = getModifierCandidates(
-            e.ctrlKey || false,
-            e.altKey || false,
-            e.shiftKey || false,
-            e.metaKey || false
-        );
+        // If a trigger key (Numpad 1-9) is pressed
+        if (number) {
+            // Check currently pressed modifiers
+            const currentModifiers = Array.from(pressedKeys).filter(k => MODIFIER_KEYS.has(k));
+            console.log(`[Shortcut] Trigger Key ${number} pressed. Modifiers:`, currentModifiers);
+            console.log('[Shortcut] Configured Pages:', JSON.stringify(shortcutConfig.pages));
 
-        if (modifiers.length === 0) return;
+            // Find a page that matches these modifiers exactly
+            const matchedPage = shortcutConfig.pages.find(page =>
+                areKeysEqual(page.modifierKeys, currentModifiers)
+            );
 
-        const page = getPageForModifiers(modifiers);
-        if (page === null) return;
-
-        // Convert numpad number to grid slot index
-        // Numpad layout: 7=0, 8=1, 9=2, 4=3, 5=4, 6=5, 1=6, 2=7, 3=8
-        const NUMPAD_TO_SLOT: Record<number, number> = {
-            7: 0, 8: 1, 9: 2,
-            4: 3, 5: 4, 6: 5,
-            1: 6, 2: 7, 3: 8,
-        };
-        const slot = NUMPAD_TO_SLOT[number];
-        if (slot === undefined) return;
-
-        mainWindow?.webContents.send('trigger-sound', { page, slot });
+            if (matchedPage) {
+                const slot = NUMPAD_TO_SLOT[number];
+                console.log(`[Shortcut] Matched Page: ${matchedPage.id}, Slot: ${slot}`);
+                if (slot !== undefined) {
+                    mainWindow?.webContents.send('trigger-sound', {
+                        pageId: matchedPage.id, // Send ID
+                        slot,
+                    });
+                }
+            } else {
+                console.log('[Shortcut] No matching page found for modifiers.');
+            }
+        }
     });
 
     uIOhook.on('keyup', (e) => {
@@ -293,22 +287,20 @@ const setupGlobalHooks = () => {
     });
 
     uIOhook.start();
+    console.log('[Main] Global hooks started');
 };
 
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
 
 const setupIpcHandlers = () => {
-    // Register the sound:// protocol handler
     protocol.handle('sound', (request) => {
         const reqUrl = new URL(request.url);
         const filePath = decodeURIComponent(reqUrl.pathname.replace(/^\/+/, ''));
         const fullPath = path.join(getSoundsDir(), filePath);
         const fileUrl = `file://${fullPath}`;
-        console.log(`[sound://] Serving: ${request.url} -> ${fileUrl}`);
         return net.fetch(fileUrl);
     });
 
-    // Save dropped sound file
     ipcMain.handle(
         'save-sound-file',
         async (_event, sourcePath: string, fileName: string) => {
@@ -321,20 +313,17 @@ const setupIpcHandlers = () => {
         }
     );
 
-    // Get local IP for QR code
     ipcMain.handle('get-local-ip', () => {
         return { ip: getLocalIp(), port: SERVER_PORT };
     });
 
-    // Download file from URL
     ipcMain.handle('download-url', async (_event, url: string) => {
         ensureSoundsDir();
         return new Promise<string>((resolve, reject) => {
             const fileName = `download_${Date.now()}.mp3`;
             const destPath = path.join(getSoundsDir(), fileName);
             const file = fs.createWriteStream(destPath);
-
-            const httpProto = url.startsWith('https') ? https : httpModule;
+            const httpProto = url.startsWith('https') ? https : http;
 
             const request = httpProto.get(url, (response) => {
                 if (
@@ -366,33 +355,41 @@ const setupIpcHandlers = () => {
         });
     });
 
-    // Send sounds data to remote clients
     ipcMain.on('sounds-for-remote', (_event, sounds) => {
         broadcast({ type: 'sounds-update', sounds });
     });
 
-    // Get sounds directory path
     ipcMain.handle('get-sounds-dir', () => {
         ensureSoundsDir();
         return getSoundsDir();
     });
 
-    // Set custom sounds directory
     ipcMain.on('set-sounds-dir', (_event, dir: string) => {
         customSoundsDir = dir || '';
         if (customSoundsDir) {
             ensureSoundsDir();
         }
-        console.log('[Sounds] Directory set to:', getSoundsDir());
     });
 
-    // Receive shortcut configuration from renderer
+    // Receive shortcut configuration
     ipcMain.on('set-shortcut-config', (_event, config) => {
         shortcutConfig = {
             mode: config.mode || 'numpad',
-            pageModifiers: config.pageModifiers || shortcutConfig.pageModifiers,
+            pages: config.pages || [],
         };
-        console.log('[Shortcuts] Config updated:', shortcutConfig);
+        console.log('[Shortcuts] Config updated:', shortcutConfig.pages.length, 'pages');
+    });
+
+    // Key Recording IPC
+    ipcMain.on('start-recording-keys', () => {
+        console.log('[Recorder] Started recording');
+        isRecording = true;
+        pressedKeys.clear(); // Reset to avoid stuck keys
+    });
+
+    ipcMain.on('stop-recording-keys', () => {
+        console.log('[Recorder] Stopped recording');
+        isRecording = false;
     });
 };
 

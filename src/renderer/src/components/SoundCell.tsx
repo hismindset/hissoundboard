@@ -5,7 +5,7 @@ import { audioController } from '../lib/audioController';
 import { formatSoundName, generateId } from '../lib/utils';
 
 interface SoundCellProps {
-    page: number;
+    page: string; // UUID
     slot: number;
     numpadLabel: number;
     onEditSound: (soundId: string) => void;
@@ -14,13 +14,16 @@ interface SoundCellProps {
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.m4a', '.webm', '.flac'];
 
 const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSound }) => {
-    const soundId = useSoundboardStore((s) => s.grid[`${page}-${slot}`]) || null;
+    // page is UUID, slot is number
+    const cellKey = `${page}-${slot}`;
+
+    const soundId = useSoundboardStore((s) => s.grid[cellKey]) || null;
     const sound = useSoundboardStore((s) => {
-        const id = s.grid[`${page}-${slot}`];
+        const id = s.grid[cellKey];
         return id ? s.library[id] : undefined;
     });
     const isActive = useSoundboardStore((s) => {
-        const id = s.grid[`${page}-${slot}`];
+        const id = s.grid[cellKey];
         return id ? s.activeSounds.has(id) : false;
     });
     const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
@@ -73,9 +76,9 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
         }
         e.dataTransfer.setData('application/x-soundboard-id', soundId);
         // Also pass source slot so we can clear it on move
-        e.dataTransfer.setData('application/x-source-slot', `${page}-${slot}`);
+        e.dataTransfer.setData('application/x-source-slot', cellKey);
         e.dataTransfer.effectAllowed = 'move';
-    }, [soundId, page, slot]);
+    }, [soundId, cellKey]);
 
     // ── Drop: this cell is the TARGET ─────────────────────────────────────
     const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -99,16 +102,23 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
 
             if (sourceSlotKey) {
                 // Grid-to-grid move: clear the source slot
-                const [srcPage, srcSlot] = sourceSlotKey.split('-').map(Number);
+                // sourceSlotKey is "pageId-slotIndex"
+                // Check if it matches active page if we support dragging between pages?
+                // The dragging logic uses keys directly so it should work if assignToSlot takes pageId.
+
+                const parts = sourceSlotKey.split('-');
+                const srcSlot = parseInt(parts.pop() || '0');
+                const srcPageId = parts.join('-'); // Rejoin in case pageId has hyphens (UUIDs do!)
 
                 // If dropping on same slot, do nothing
-                if (srcPage === page && srcSlot === slot) return;
+                if (srcPageId === page && srcSlot === slot) return;
 
                 // If target slot has a sound, swap them
                 if (soundId) {
-                    assignToSlot(srcPage, srcSlot, soundId);
+                    // Check if we can assign to source (might be on different page)
+                    assignToSlot(srcPageId, srcSlot, soundId);
                 } else {
-                    unassignSlot(srcPage, srcSlot);
+                    unassignSlot(srcPageId, srcSlot);
                 }
             }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Grid from './components/Grid';
-import PageNav from './components/PageNav';
+import PageList from './components/PageList';
 import Settings from './components/Settings';
 import Library from './components/Library';
 import SoundEditor from './components/SoundEditor';
@@ -16,7 +16,8 @@ function App() {
     const clearAllActive = useSoundboardStore((s) => s.clearAllActive);
     const library = useSoundboardStore((s) => s.library);
     const grid = useSoundboardStore((s) => s.grid);
-    const currentPage = useSoundboardStore((s) => s.currentPage);
+    const pages = useSoundboardStore((s) => s.pages);
+    const activePageId = useSoundboardStore((s) => s.activePageId);
     const monitorDeviceId = useSoundboardStore((s) => s.monitorDeviceId);
     const outputDeviceId = useSoundboardStore((s) => s.outputDeviceId);
     const monitorVolume = useSoundboardStore((s) => s.monitorVolume);
@@ -26,6 +27,7 @@ function App() {
     const getAllSoundsForRemote = useSoundboardStore((s) => s.getAllSoundsForRemote);
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
+    const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
 
     const handleEditSound = useCallback((soundId: string) => {
         setEditingSoundId(soundId);
@@ -35,6 +37,15 @@ function App() {
         setEditingSoundId(null);
     }, []);
 
+    // Sync shortcut config to main process
+    // This must be here so it runs regardless of current view
+    useEffect(() => {
+        window.api.setShortcutConfig?.({
+            mode: shortcutMode,
+            pages: pages.map(p => ({ id: p.id, modifierKeys: p.modifierKeys })),
+        });
+    }, [shortcutMode, pages]);
+
     // Handle IPC events from main process
     useEffect(() => {
         const cleanupPanic = window.api.onPanicStop(() => {
@@ -43,7 +54,29 @@ function App() {
         });
 
         const cleanupTrigger = window.api.onTriggerSound(async (payload) => {
-            const key = `${payload.page}-${payload.slot}`;
+            let targetPageId = '';
+
+            // If main sends pageID (new system)
+            if (payload.pageId) {
+                targetPageId = payload.pageId;
+            }
+            // Fallback: If main sends page index (legacy/numpad default)
+            else if (typeof payload.page === 'number') {
+                const targetPage = pages[payload.page];
+                if (targetPage) {
+                    targetPageId = targetPage.id;
+                }
+            }
+
+            if (!targetPageId && activePageId) {
+                // Should we trigger on active page? 
+                // Only if the shortcut was meant for "Active Page".
+                // But blindly triggering on active page might be wrong.
+            }
+
+            if (!targetPageId) return;
+
+            const key = `${targetPageId}-${payload.slot}`;
             const soundId = grid[key];
             if (soundId) {
                 const sound = library[soundId];
@@ -72,13 +105,13 @@ function App() {
             cleanupTrigger();
             cleanupRemote();
         };
-    }, [library, grid, monitorDeviceId, outputDeviceId, clearAllActive, setActive, setInactive, getAllSoundsForRemote]);
+    }, [library, grid, pages, activePageId, monitorDeviceId, outputDeviceId, clearAllActive, setActive, setInactive, getAllSoundsForRemote]);
 
     return (
         <div className="dark h-screen w-screen bg-surface-950 text-white flex flex-col overflow-hidden">
             {/* Titlebar drag region */}
             <div
-                className="h-10 flex items-center justify-between px-4 shrink-0"
+                className="h-10 flex items-center justify-between px-4 shrink-0 bg-surface-900 border-b border-surface-800"
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
             >
                 <div className="flex items-center gap-2 pl-16">
@@ -113,14 +146,19 @@ function App() {
 
             {/* Main content area */}
             <div className="flex-1 flex overflow-hidden">
+
+                {/* Left Sidebar: Page List */}
+                {view === 'grid' && (
+                    <PageList />
+                )}
+
                 {/* Grid / Settings area */}
-                <div className={`flex-1 flex flex-col px-6 pb-6 gap-4 overflow-auto ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4'}`}>
+                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4 px-6 overflow-auto'}`}>
                     {view === 'grid' ? (
                         <>
-                            <PageNav />
                             <Grid onEditSound={handleEditSound} />
-                            <p className="text-[10px] text-surface-500 mt-1">
-                                Seite {currentPage + 1} von 10 · Rechtsklick = Editor · Mittelklick = Entfernen · ESC = Panic Stop
+                            <p className="text-[10px] text-surface-500 mt-4 select-none">
+                                Right Click = Edit · Middle Click = Remove · ESC = Panic
                             </p>
                         </>
                     ) : (
@@ -128,7 +166,7 @@ function App() {
                     )}
                 </div>
 
-                {/* Library sidebar */}
+                {/* Right Sidebar: Library */}
                 {libraryOpen && (
                     <Library onEditSound={handleEditSound} />
                 )}

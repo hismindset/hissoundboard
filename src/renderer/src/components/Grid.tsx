@@ -11,14 +11,24 @@ interface GridProps {
 }
 
 const Grid: React.FC<GridProps> = ({ onEditSound }) => {
-    const currentPage = useSoundboardStore((s) => s.currentPage);
+    const activePageId = useSoundboardStore((s) => s.activePageId);
+
+    // If no page is active (e.g. empty state), show nothing or a placeholder
+    if (!activePageId) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-surface-500 gap-2">
+                <p>No active page.</p>
+                <p className="text-xs">Create a page in the sidebar to get started.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="grid grid-cols-3 gap-3 w-full max-w-[480px] animate-fade-in">
             {NUMPAD_LAYOUT.map((numpadNum, gridIndex) => (
                 <SoundCell
-                    key={`${currentPage}-${gridIndex}`}
-                    page={currentPage}
+                    key={`${activePageId}-${gridIndex}`}
+                    page={activePageId}
                     slot={gridIndex}
                     numpadLabel={numpadNum}
                     onEditSound={onEditSound}
