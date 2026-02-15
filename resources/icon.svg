@@ -1,0 +1,67 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 
+  Modern Launchpad Icon
+  Theme: OpenSoundBoard
+  Style: Numpad Grid, Dark, Neon Accents
+  Colors: 
+    - Background: #080912 (surface-950)
+    - Inactive Button: #13152e (surface-800)
+    - Active Button: #7c3aed (accent) to #a855f7 (neon-purple)
+  -->
+
+  <defs>
+    <!-- Background Gradient: Slightly lighter at top for depth, but mostly surface-950 -->
+    <linearGradient id="bgGradient" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a1f3d"/> <!-- surface-700 for highlighting top -->
+      <stop offset="100%" stop-color="#080912"/> <!-- surface-950 -->
+    </linearGradient>
+
+    <!-- Active Button Gradient: Accent to Neon Purple -->
+    <linearGradient id="activeGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+
+    <!-- Glow Effect for Active Button -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Inner Shadow for Inactive Buttons -->
+    <filter id="innerShadow">
+      <feOffset dx="0" dy="2"/>
+      <feGaussianBlur stdDeviation="2" result="offset-blur"/>
+      <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse"/>
+      <feFlood flood-color="black" flood-opacity="0.4" result="color"/>
+      <feComposite operator="in" in="color" in2="inverse" result="shadow"/>
+      <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
+    </filter>
+  </defs>
+
+  <!-- Only the rounded rect has fill, creating transparency outside corners -->
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bgGradient)"/>
+
+  <g transform="translate(132, 132)">
+    <!-- Row 1 -->
+    <rect x="0" y="0" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+    <rect x="270" y="0" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+    <rect x="540" y="0" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+
+    <!-- Row 2 -->
+    <rect x="0" y="270" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+    
+    <!-- Center Active Button -->
+    <rect x="270" y="270" width="220" height="220" rx="48" fill="url(#activeGradient)" filter="url(#glow)"/>
+    
+    <rect x="540" y="270" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+
+    <!-- Row 3 -->
+    <rect x="0" y="540" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+    <rect x="270" y="540" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+    <rect x="540" y="540" width="220" height="220" rx="48" fill="#13152e" filter="url(#innerShadow)"/>
+  </g>
+</svg>
