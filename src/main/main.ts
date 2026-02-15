@@ -409,6 +409,11 @@ const setupIpcHandlers = () => {
         console.log('[Recorder] Stopped recording');
         isRecording = false;
     });
+
+    // Logging Bridge
+    ipcMain.on('log', (_event, message) => {
+        console.log(message);
+    });
 };
 
 // ─── App Lifecycle ───────────────────────────────────────────────────────────

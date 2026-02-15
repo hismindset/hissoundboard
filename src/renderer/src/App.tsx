@@ -60,16 +60,25 @@ const App: React.FC = () => {
         const unsub = useSoundboardStore.subscribe((state, prevState) => {
             if (state.audioSettings !== prevState.audioSettings) {
                 const s = state.audioSettings;
-                audioController.setMonitorVolume(s.monitorVolume);
-                audioController.setOutputVolume(s.outputVolume);
-                audioController.setMonitorMuted(s.monitorMuted);
-                audioController.setOutputMuted(s.outputMuted);
+                const prevS = prevState.audioSettings;
 
-                if (s.monitorDeviceId !== prevState.audioSettings.monitorDeviceId) {
+                // Volume & Mute Updates
+                if (s.monitorVolume !== prevS.monitorVolume) audioController.setMonitorVolume(s.monitorVolume);
+                if (s.outputVolume !== prevS.outputVolume) audioController.setOutputVolume(s.outputVolume);
+                if (s.micVolume !== prevS.micVolume) audioController.setMicVolume(s.micVolume);
+
+                if (s.monitorMuted !== prevS.monitorMuted) audioController.setMonitorMuted(s.monitorMuted);
+                if (s.outputMuted !== prevS.outputMuted) audioController.setOutputMuted(s.outputMuted);
+
+                // Device Updates
+                if (s.monitorDeviceId !== prevS.monitorDeviceId) {
                     audioController.setMonitorDevice(s.monitorDeviceId);
                 }
-                if (s.outputDeviceId !== prevState.audioSettings.outputDeviceId) {
+                if (s.outputDeviceId !== prevS.outputDeviceId) {
                     audioController.setOutputDevice(s.outputDeviceId);
+                }
+                if (s.micDeviceId !== prevS.micDeviceId) {
+                    audioController.setMicDevice(s.micDeviceId);
                 }
             }
         });

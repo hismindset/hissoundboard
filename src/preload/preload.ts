@@ -91,6 +91,9 @@ const api = {
     sendSoundsForRemote: (sounds: unknown) => {
         ipcRenderer.send('sounds-for-remote', sounds);
     },
+
+    /** Log message to main process console */
+    log: (message: string) => ipcRenderer.send('log', message),
 };
 
 contextBridge.exposeInMainWorld('api', api);

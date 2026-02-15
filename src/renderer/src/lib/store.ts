@@ -12,10 +12,12 @@ export type ShortcutMode = 'numpad' | 'standard';
 export interface AudioSettings {
     monitorVolume: number; // 0.0 to 1.0
     outputVolume: number; // 0.0 to 1.0
+    micVolume: number; // 0.0 to 2.0 (200%)
     monitorMuted: boolean;
     outputMuted: boolean;
     monitorDeviceId: string;
     outputDeviceId: string;
+    micDeviceId: string;
 }
 
 interface SoundboardState {
@@ -122,10 +124,12 @@ export const useSoundboardStore = create<SoundboardState>()(
             audioSettings: {
                 monitorVolume: 1.0,
                 outputVolume: 0.5,
+                micVolume: 1.0,
                 monitorMuted: false,
                 outputMuted: false,
                 monitorDeviceId: '',
                 outputDeviceId: '',
+                micDeviceId: '',
             },
 
             customSoundsDir: '',
@@ -332,12 +336,12 @@ export const useSoundboardStore = create<SoundboardState>()(
         }),
         {
             name: 'opensoundboard-storage',
-            version: 5, // Bump version to clear bad activeSounds state
+            version: 6, // Bump version to add mic settings
             storage: createJSONStorage(() => debouncedStorage),
             migrate: (persistedState: any, version: number) => {
                 let state = persistedState;
 
-                // Migration v3 -> v4 (Audio Settings)
+                // Migration v3 -> v4 (Audio Settings) ... (Existing logic)
                 if (version <= 3) {
                     const monitorVolume = typeof state.monitorVolume === 'number' ? state.monitorVolume : 1.0;
                     const outputVolume = typeof state.outputVolume === 'number' ? state.outputVolume : 0.5;
@@ -363,16 +367,19 @@ export const useSoundboardStore = create<SoundboardState>()(
 
                 // Migration v4 -> v5 (Fix activeSounds Set persistence)
                 if (version <= 4) {
-                    // activeSounds should not be persisted. Ensure it's cleared.
-                    // We can't return a Set here because this object is merged with initial state? 
-                    // No, migrate returns the *persisted* chunk. 
-                    // If we return it without activeSounds, the initial state (new Set) will be used? 
-                    // Actually, zustand persist merge implementation: state = { ...get(), ...migratedState }
-                    // So if we remove it from here, the default `activeSounds: new Set()` from initial state will be overwritten?
-                    // Wait, default merge is `deep` or `shallow`?
-                    // Default merge: `return { ...state, ...persistedState }`
-                    // So if we REMOVE activeSounds from persistedState, the `new Set()` from initial state (which is in `state`) will be preserved.
                     delete state.activeSounds;
+                }
+
+                // Migration v5 -> v6 (Add Mic Settings)
+                if (version <= 5) {
+                    state = {
+                        ...state,
+                        audioSettings: {
+                            ...state.audioSettings,
+                            micVolume: 1.0,
+                            micDeviceId: '',
+                        }
+                    };
                 }
 
                 return state;

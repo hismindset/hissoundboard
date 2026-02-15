@@ -9,25 +9,83 @@ class AudioController {
     private activeSounds: Map<string, HTMLAudioElement[]> = new Map();
     private trimHandlers: Map<HTMLAudioElement, () => void> = new Map();
 
+    // Microphone Passthrough State
+    private audioContext: AudioContext;
+    private micSource: MediaStreamAudioSourceNode | null = null;
+    private micGain: GainNode;
+
     // Internal state mirrored from store
     private settings: AudioSettings = {
         monitorVolume: 1.0,
         outputVolume: 0.5,
+        micVolume: 1.0,
         monitorMuted: false,
         outputMuted: false,
         monitorDeviceId: '',
         outputDeviceId: '',
+        micDeviceId: '',
     };
 
+    private log(msg: string) {
+        console.log(msg);
+        if ((window as any).api && (window as any).api.log) {
+            (window as any).api.log(msg);
+        }
+    }
+
+    private warn(msg: string, ...args: any[]) {
+        console.warn(msg, ...args);
+        if ((window as any).api && (window as any).api.log) {
+            (window as any).api.log(`[WARN] ${msg} ${args.map(a => String(a)).join(' ')}`);
+        }
+    }
+
+    private error(msg: string, ...args: any[]) {
+        console.error(msg, ...args);
+        if ((window as any).api && (window as any).api.log) {
+            (window as any).api.log(`[ERROR] ${msg} ${args.map(a => String(a)).join(' ')}`);
+        }
+    }
+
+    constructor() {
+        this.log('[AudioController] Initializing...');
+        // Initialize AudioContext strictly at 48kHz as requested
+        this.audioContext = new AudioContext({
+            latencyHint: 'interactive',
+            sampleRate: 48000
+        });
+        this.log(`[AudioController] AudioContext state: ${this.audioContext.state}, SampleRate: ${this.audioContext.sampleRate}`);
+
+        // Create Gain Node for Mic
+        this.micGain = this.audioContext.createGain();
+        this.micGain.gain.value = 1.0;
+        this.micGain.connect(this.audioContext.destination);
+    }
+
     /** Initialize controller with settings from store */
-    init(settings: AudioSettings) {
+    async init(settings: AudioSettings) {
+        console.log('[AudioController] init with settings:', settings);
         this.settings = { ...settings };
         this.updateActiveSounds(); // Apply to any currently playing sounds
+
+        // Initialize Mic Setup
+        await this.updateMicRouting();
     }
 
     updateSettings(updates: Partial<AudioSettings>) {
+        const oldSettings = { ...this.settings };
         this.settings = { ...this.settings, ...updates };
         this.updateActiveSounds();
+
+        // Check if Mic settings changed
+        if (
+            oldSettings.micDeviceId !== this.settings.micDeviceId ||
+            oldSettings.outputDeviceId !== this.settings.outputDeviceId || // Output device affects where Mic goes
+            oldSettings.micVolume !== this.settings.micVolume
+        ) {
+            console.log('[AudioController] Mic settings changed, updating routing...');
+            this.updateMicRouting();
+        }
     }
 
     setMonitorVolume(volume: number) {
@@ -38,6 +96,11 @@ class AudioController {
     setOutputVolume(volume: number) {
         this.settings.outputVolume = volume;
         this.updateAllActiveVolumes();
+    }
+
+    setMicVolume(volume: number) {
+        this.settings.micVolume = volume;
+        this.updateMicGain();
     }
 
     setMonitorMuted(muted: boolean) {
@@ -52,35 +115,143 @@ class AudioController {
 
     setMonitorDevice(deviceId: string) {
         this.settings.monitorDeviceId = deviceId;
-        // logic to update running sounds device? 
-        // For now, let's just update settings. sounds will pick it up on next play or via updateActiveSounds if we implement it fully.
-        // But updateActiveSounds in its current state doesn't look like it reapplies sinkId.
-        // Let's rely on init/next play for now, or improve updateActiveSounds.
     }
 
     setOutputDevice(deviceId: string) {
         this.settings.outputDeviceId = deviceId;
+        // Also update Mic output routing
+        this.updateMicOutputDevice();
     }
+
+    setMicDevice(deviceId: string) {
+        this.settings.micDeviceId = deviceId;
+        this.updateMicRouting();
+    }
+
+    // ── Microphone Logic ──────────────────────────────────────────────
+
+    private async updateMicRouting() {
+        this.log('[AudioController] updateMicRouting');
+
+        // Ensure AudioContext is running
+        if (this.audioContext.state === 'suspended') {
+            this.log('[AudioController] Resuming AudioContext...');
+            try {
+                await this.audioContext.resume();
+                this.log('[AudioController] AudioContext resumed.');
+            } catch (err) {
+                this.error('[AudioController] Failed to resume AudioContext:', err);
+            }
+        }
+
+        // 1. Update Gain first
+        this.updateMicGain();
+
+        // 2. Update Output Device (Where the Mic goes)
+        // CRITICAL: We now move the ENTIRE AudioContext to the output device
+        await this.updateMicOutputDevice();
+
+        // 3. Update Input Source
+        if (!this.settings.micDeviceId) {
+            this.log('[AudioController] No mic device selected, stopping.');
+            this.stopMic();
+            return;
+        }
+
+        // Restart mic if needed
+        this.stopMic();
+
+        try {
+            this.log(`[AudioController] Requesting Mic Access: ${this.settings.micDeviceId}`);
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    deviceId: { exact: this.settings.micDeviceId },
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                }
+            });
+            this.log(`[AudioController] Got Mic Stream: ${stream.id}`);
+
+            this.micSource = this.audioContext.createMediaStreamSource(stream);
+            this.micSource.connect(this.micGain);
+            this.log('[AudioController] Mic Graph Connected: Source -> Gain -> Destination');
+
+            // DEBUG: Check signal level
+            this.debugSignalLevel();
+
+        } catch (err) {
+            this.error('[AudioController] Failed to access microphone:', err);
+        }
+    }
+
+    private debugSignalLevel() {
+        // Create an analyser to see if we have bits moving
+        const analyser = this.audioContext.createAnalyser();
+        this.micGain.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+
+        // Check once after a short delay
+        setTimeout(() => {
+            analyser.getByteFrequencyData(data);
+            const sum = data.reduce((a, b) => a + b, 0);
+            const average = sum / data.length;
+            this.log(`[AudioController] Signal Check - Average Level: ${average}`);
+            if (average === 0) {
+                this.warn('[AudioController] WARNING: Zero signal detected. Check if Mic is hardware muted or permissions issues.');
+            } else {
+                this.log('[AudioController] SUCCESS: Signal detected in graph.');
+            }
+        }, 2000);
+    }
+
+    private updateMicGain() {
+        if (this.micGain) {
+            // Smooth transition
+            // this.log(`[AudioController] Setting Mic Volume: ${this.settings.micVolume}`);
+            this.micGain.gain.setTargetAtTime(this.settings.micVolume, this.audioContext.currentTime, 0.1);
+        }
+    }
+
+    private async updateMicOutputDevice() {
+        if (this.settings.outputDeviceId) {
+            try {
+                // Modern Electron/Chrome supports setSinkId on AudioContext
+                if ('setSinkId' in this.audioContext && typeof (this.audioContext as any).setSinkId === 'function') {
+                    this.log(`[AudioController] AudioContext.setSinkId: ${this.settings.outputDeviceId}`);
+                    await (this.audioContext as any).setSinkId(this.settings.outputDeviceId);
+                } else {
+                    this.warn('[AudioController] AudioContext.setSinkId NOT supported in this environment.');
+                }
+            } catch (err) {
+                this.warn('[AudioController] Failed to set AudioContext output device:', err);
+            }
+        }
+    }
+
+    private stopMic() {
+        if (this.micSource) {
+            this.log('[AudioController] Stopping Mic...');
+            this.micSource.disconnect();
+            // Stop all tracks to release hardware
+            if ((this.micSource as any).mediaStream) {
+                (this.micSource as any).mediaStream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+            }
+            this.micSource = null;
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
 
     /** Update volume/device for all currently playing sounds */
     private async updateActiveSounds() {
         for (const [soundId, elements] of this.activeSounds.entries()) {
             const [monitorAudio, outputAudio] = elements;
-            // logic to find sound metadata is tricky here effectively, 
-            // but we can just re-apply the gain based on the *element's* base volume?
-            // Actually, HTMLAudioElement doesn't store "base volume". 
-            // We rely on the fact that we set volume = sound.volume * master.
-            // A perfect implementation would need a map of Sound objects or base volumes.
-            // For now, let's just re-set sink IDs if changed. 
-            // Dynamic volume changing while playing requires storing the base volume of the sound.
-            // Let's postpone dynamic volume sweeping for *currently playing* sounds if it's too complex,
-            // OR store the base volume in a WeakMap.
+            // Ensure outputAudio goes to the right device
+            // Note: playing sounds might not update device dynamically perfectly without re-attach, 
+            // but setSinkId should work.
+            this.applySettingsToElements(monitorAudio, outputAudio, this.elementBaseVolume.get(monitorAudio) || 1.0);
         }
-        // Since the prompt asks for "Apply immediate upon application launch", init() covers the critical path.
-        // For real-time slider updates, we ideally want them to affect playing sounds.
-        // Let's just focus on sinkId updates which are safe.
-        // Volume updates on the fly for HTMLAudioElements are hard without knowing the original sound volume.
-        // We will accept that volume changes apply to *next* played sounds, OR we can try to support it.
     }
 
     // Storing base volume for active elements to allow dynamic volume adjustment

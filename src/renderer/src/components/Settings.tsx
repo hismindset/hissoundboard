@@ -9,6 +9,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     // Local state for devices
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+    const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]); // New state for mics
     const [showWizard, setShowWizard] = useState(false);
 
     const customSoundsDir = useSoundboardStore((s) => s.customSoundsDir);
@@ -20,13 +21,30 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [serverUrl, setServerUrl] = useState<string>('');
     const [defaultSoundsDir, setDefaultSoundsDir] = useState<string>('');
 
-    // Load audio output devices
+    // Load audio output devices AND Input devices
     useEffect(() => {
         navigator.mediaDevices.enumerateDevices().then((allDevices) => {
+            // Outputs
             const audioOutputs = allDevices.filter(
                 (d) => d.kind === 'audiooutput' && d.deviceId
             );
             setDevices(audioOutputs);
+
+            // Inputs (Microphones) - WITH STRICT FILTERING
+            const audioInputs = allDevices.filter((d) => {
+                const label = d.label.toLowerCase();
+                return (
+                    d.kind === 'audioinput' &&
+                    d.deviceId &&
+                    // STRICT LOOP PREVENTION FILTER
+                    !label.includes('cable') &&
+                    !label.includes('output') &&
+                    !label.includes('virtual') &&
+                    !label.includes('blackhole')
+                    // We might also want to filter "stereo mix" or "what u hear" if common, but distinct enough usually.
+                );
+            });
+            setMicDevices(audioInputs);
         });
     }, []);
 
@@ -103,7 +121,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
 
                 {/* Output Device (Cable) */}
-                <div className="mb-6">
+                <div>
                     <div className="flex items-center gap-2 mb-2">
                         <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Output Device (To Mic)</label>
                         <button
@@ -142,6 +160,41 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
                         />
                     </div>
+                </div>
+
+                {/* Microphone Input (Passthrough) */}
+                <div className="mb-6 pt-2 border-t border-surface-700/50">
+                    <label className="block text-xs text-surface-300 mb-1.5">
+                        🎤 Microphone Injection (Passthrough)
+                    </label>
+                    <select
+                        value={audioSettings.micDeviceId}
+                        onChange={(e) => setAudioSettings({ micDeviceId: e.target.value })}
+                        className="w-full px-3 py-2.5 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
+                    >
+                        <option value="">None (Disabled)</option>
+                        {micDevices.map((d) => (
+                            <option key={d.deviceId} value={d.deviceId}>
+                                {d.label || `Microphone ${d.deviceId.slice(0, 8)}`}
+                            </option>
+                        ))}
+                    </select>
+                    <div className="flex items-center gap-3 mt-2">
+                        <span className="text-xs w-8 text-surface-400">
+                            {Math.round(audioSettings.micVolume * 100)}%
+                        </span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="200" // 200% as requested
+                            value={Math.round(audioSettings.micVolume * 100)}
+                            onChange={(e) => setAudioSettings({ micVolume: Number(e.target.value) / 100 })}
+                            className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
+                        />
+                    </div>
+                    <p className="text-[10px] text-surface-500 mt-1.5">
+                        Selected microphone will be routed to the <b>Output Device</b> (Cable) only. It will NOT be heard on the Monitor device.
+                    </p>
                 </div>
             </div>
 
