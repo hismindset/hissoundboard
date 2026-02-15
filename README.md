@@ -52,6 +52,12 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 
 ---
 
+## 🎙️ Microphone Injection (Passthrough)
+1.  Open **Settings** and find the "Microphone Injection" section.
+2.  Select your hardware microphone (e.g., Focusrite, Internal Mic).
+3.  The app will route your voice directly to the **Output Device** (Cable).
+4.  **Note:** You will *not* hear yourself (to prevent feedback), but others in the voice chat will hear you + the soundboard sounds.
+
 ## 📱 Remote Control
 1. Open **Settings** in the desktop app.
 2. Scan the **QR Code** or enter the IP address on your phone's browser.
