@@ -32,6 +32,7 @@ interface ElectronApi {
     setSoundsDir: (dir: string) => void;
     setShortcutConfig: (config: ShortcutConfig) => void;
     sendSoundsForRemote: (sounds: unknown) => void;
+    createVirtualSink: () => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

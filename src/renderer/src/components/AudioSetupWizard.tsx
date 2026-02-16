@@ -42,16 +42,19 @@ export const AudioSetupWizard: React.FC<{ onClose?: () => void }> = ({ onClose }
     };
 
     const handleCreateSink = async () => {
-        // @ts-ignore
-        if (window.electronAPI) {
-            // @ts-ignore
-            const res = await window.electronAPI.invoke('create-virtual-sink');
+        try {
+            const res = await window.api.createVirtualSink();
             if (res.success) {
-                alert("Virtual Sink Created! Scanning...");
+                // Determine success message based on ID
+                // The main process returns { success: true, id: 'existing' | 'module-id' }
+                // But the type in preload is just success/error. We can infer.
+                alert("Virtual Sink Ready! Scanning...");
                 scanDevices();
             } else {
                 alert("Failed: " + res.error);
             }
+        } catch (e: any) {
+            alert("Error invoking create sink: " + e.message);
         }
     };
 

@@ -72,6 +72,10 @@ const api = {
     /** Set custom sounds directory */
     setSoundsDir: (dir: string) => ipcRenderer.send('set-sounds-dir', dir),
 
+    /** Create Linux Virtual Sink (PulseAudio) */
+    createVirtualSink: (): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('create-virtual-sink'),
+
     // ─── Shortcut Config & Recording ─────────────────────────────────────────
 
     /** Send shortcut configuration to main process */
