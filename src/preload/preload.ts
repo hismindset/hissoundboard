@@ -42,6 +42,13 @@ const api = {
             ipcRenderer.removeListener('request-sounds-for-remote', handler);
     },
 
+    /** Listen to Wayland fallback warning */
+    onWaylandWarning: (callback: () => void) => {
+        const handler = () => callback();
+        ipcRenderer.on('wayland-warning', handler);
+        return () => ipcRenderer.removeListener('wayland-warning', handler);
+    },
+
     /** Receive recorded key codes from main process */
     onKeyRecorded: (callback: (keyCode: number) => void) => {
         const handler = (_event: IpcRendererEvent, keyCode: number) => callback(keyCode);

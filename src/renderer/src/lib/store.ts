@@ -42,6 +42,7 @@ interface SoundboardState {
 
     // ── First Run Setup ──────────────────────────────────────────────────
     hasCompletedSetup: boolean;
+    showWaylandWarning: boolean;
 
     // ── Actions ──────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ interface SoundboardState {
 
     // Setup
     setHasCompletedSetup: (completed: boolean) => void;
+    setShowWaylandWarning: (show: boolean) => void;
 
     // Remote
     getAllSoundsForRemote: () => { pages: Partial<Page>[]; activePageId: string; sounds: { pageId: string; slot: number; sound: Sound }[] };
@@ -136,6 +138,7 @@ export const useSoundboardStore = create<SoundboardState>()(
             shortcutMode: 'numpad',
             libraryOpen: false,
             hasCompletedSetup: false,
+            showWaylandWarning: false,
 
             // ── Library Actions ──────────────────────────────────────────────
 
@@ -284,6 +287,7 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             // ── Setup ────────────────────────────────────────────────────────
             setHasCompletedSetup: (completed) => set({ hasCompletedSetup: completed }),
+            setShowWaylandWarning: (show) => set({ showWaylandWarning: show }),
 
             // ── Remote ───────────────────────────────────────────────────────
 

@@ -32,6 +32,7 @@ const App: React.FC = () => {
     });
     const setAudioSettings = useSoundboardStore((s) => s.setAudioSettings);
     const hasCompletedSetup = useSoundboardStore((s) => s.hasCompletedSetup);
+    const setShowWaylandWarning = useSoundboardStore((s) => s.setShowWaylandWarning);
 
     const setActive = useSoundboardStore((s) => s.setActive);
     const setInactive = useSoundboardStore((s) => s.setInactive);
@@ -115,6 +116,10 @@ const App: React.FC = () => {
 
     // Handle IPC events
     useEffect(() => {
+        const cleanupWayland = window.api.onWaylandWarning?.(() => {
+            setShowWaylandWarning(true);
+        });
+
         const cleanupPanic = window.api.onPanicStop(() => {
             audioController.stopAll();
             clearAllActive();
@@ -160,11 +165,12 @@ const App: React.FC = () => {
         });
 
         return () => {
+            if (cleanupWayland) cleanupWayland();
             cleanupPanic();
             cleanupTrigger();
             cleanupRemote();
         };
-    }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, getAllSoundsForRemote]);
+    }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, getAllSoundsForRemote, setShowWaylandWarning]);
 
     return (
         <div className="dark h-screen w-screen bg-surface-950 text-white flex flex-col overflow-hidden">
@@ -214,7 +220,7 @@ const App: React.FC = () => {
                             </p>
                         </>
                     ) : (
-                        <Settings />
+                        <Settings onClose={() => setView('grid')} />
                     )}
                 </div>
 

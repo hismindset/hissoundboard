@@ -17,6 +17,9 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
 
+    const showWaylandWarning = useSoundboardStore((s) => s.showWaylandWarning);
+    const setShowWaylandWarning = useSoundboardStore((s) => s.setShowWaylandWarning);
+
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [serverUrl, setServerUrl] = useState<string>('');
     const [defaultSoundsDir, setDefaultSoundsDir] = useState<string>('');
@@ -78,6 +81,24 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </svg>
                 Settings
             </h2>
+
+            {showWaylandWarning && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3 items-start relative">
+                    <span className="text-amber-500 mt-0.5">⚠️</span>
+                    <div className="flex-1 pr-6">
+                        <h4 className="text-amber-500 font-medium text-sm">Wayland detected.</h4>
+                        <p className="text-amber-500/80 text-xs mt-1">
+                            Advanced shortcuts are limited for security reasons. For full Shortcut support, log in using an X11 session.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setShowWaylandWarning(false)}
+                        className="absolute top-2 right-2 p-2 text-amber-500/60 hover:text-amber-500 transition-colors"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
 
             {/* Audio Devices & Volume */}
             <div className="space-y-4">

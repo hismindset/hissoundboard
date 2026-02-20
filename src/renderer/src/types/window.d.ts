@@ -24,6 +24,9 @@ interface ElectronApi {
     startRecordingKeys: () => void;
     stopRecordingKeys: () => void;
 
+    // Warnings
+    onWaylandWarning?: (callback: () => void) => () => void;
+
     saveSoundFile: (sourcePath: string, fileName: string) => Promise<string>;
     getLocalIp: () => Promise<{ ip: string; port: number }>;
     downloadUrl: (url: string) => Promise<string>;

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
@@ -221,76 +221,132 @@ const areKeysEqual = (keysA: number[], keysB: number[]) => {
 };
 
 // Modifier keys that we care about for filtering
-const MODIFIER_KEYS = new Set([
+const MODIFIER_KEYS = new Set<number>([
     UiohookKey.Ctrl, UiohookKey.CtrlRight,
     UiohookKey.Alt, UiohookKey.AltRight,
     UiohookKey.Shift, UiohookKey.ShiftRight,
     UiohookKey.Meta, UiohookKey.MetaRight,
 ]);
 
-const setupGlobalHooks = () => {
-    uIOhook.on('keydown', (e) => {
-        pressedKeys.add(e.keycode);
+let useFallback = false;
 
-        // Recording Mode
-        if (isRecording) {
-            console.log('[Recorder] Key Pressed:', e.keycode);
-            // Allow recording ANY key for debugging, or filter?
-            // The prompt said "Only accept Modifier keys".
-            // But if user wants to use "Tab" as modifier?
-            // Let's stick to MODIFIER_KEYS filter as per requirements but log it.
-            if (MODIFIER_KEYS.has(e.keycode)) {
-                mainWindow?.webContents.send('key-recorded', e.keycode);
-            } else {
-                console.log('[Recorder] Ignored non-modifier:', e.keycode);
-            }
-            return;
-        }
+const registerFallbackShortcuts = () => {
+    globalShortcut.unregisterAll();
 
-        // Panic Stop
-        if (e.keycode === UiohookKey.Escape) {
-            console.log('[Shortcut] Panic Stop Triggered');
-            mainWindow?.webContents.send('panic-stop');
-            return;
-        }
+    const uioModifierMap: Record<number, string> = {
+        [UiohookKey.Ctrl]: 'Control',
+        [UiohookKey.CtrlRight]: 'Control',
+        [UiohookKey.Alt]: 'Alt',
+        [UiohookKey.AltRight]: 'Alt',
+        [UiohookKey.Shift]: 'Shift',
+        [UiohookKey.ShiftRight]: 'Shift',
+        [UiohookKey.Meta]: 'Command',
+        [UiohookKey.MetaRight]: 'Command',
+    };
 
-        // Normal Trigger Logic
-        const keyMap = shortcutConfig.mode === 'numpad' ? NUMPAD_KEY_MAP : STANDARD_KEY_MAP;
-        const number = keyMap[e.keycode];
+    const keys = shortcutConfig.mode === 'numpad'
+        ? ['num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'num7', 'num8', 'num9']
+        : ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const slotMap = [6, 7, 8, 3, 4, 5, 0, 1, 2];
 
-        // If a trigger key (Numpad 1-9) is pressed
-        if (number) {
-            // Check currently pressed modifiers
-            const currentModifiers = Array.from(pressedKeys).filter(k => MODIFIER_KEYS.has(k));
-            console.log(`[Shortcut] Trigger Key ${number} pressed. Modifiers:`, currentModifiers);
-            console.log('[Shortcut] Configured Pages:', JSON.stringify(shortcutConfig.pages));
+    shortcutConfig.pages.forEach(page => {
+        const electronModifiers = Array.from(new Set(
+            page.modifierKeys.map(k => uioModifierMap[k]).filter(Boolean)
+        )).join('+');
 
-            // Find a page that matches these modifiers exactly
-            const matchedPage = shortcutConfig.pages.find(page =>
-                areKeysEqual(page.modifierKeys, currentModifiers)
-            );
+        const prefix = electronModifiers ? `${electronModifiers}+` : '';
 
-            if (matchedPage) {
-                const slot = NUMPAD_TO_SLOT[number];
-                console.log(`[Shortcut] Matched Page: ${matchedPage.id}, Slot: ${slot}`);
-                if (slot !== undefined) {
+        keys.forEach((key, index) => {
+            const slot = slotMap[index];
+            const accelerator = `${prefix}${key}`;
+            try {
+                globalShortcut.register(accelerator, () => {
                     mainWindow?.webContents.send('trigger-sound', {
-                        pageId: matchedPage.id, // Send ID
+                        pageId: page.id,
                         slot,
                     });
-                }
-            } else {
-                console.log('[Shortcut] No matching page found for modifiers.');
+                });
+            } catch (err) {
+                console.error(`[Shortcut] Failed to register fallback ${accelerator}`, err);
             }
+        });
+    });
+
+    try {
+        globalShortcut.register('Escape', () => {
+            mainWindow?.webContents.send('panic-stop');
+        });
+    } catch (err) { }
+};
+
+const setupGlobalHooks = () => {
+    const isWayland = process.env.WAYLAND_DISPLAY !== undefined;
+    useFallback = isWayland;
+
+    if (!isWayland) {
+        try {
+            uIOhook.on('keydown', (e) => {
+                pressedKeys.add(e.keycode);
+
+                // Recording Mode
+                if (isRecording) {
+                    console.log('[Recorder] Key Pressed:', e.keycode);
+                    if (MODIFIER_KEYS.has(e.keycode)) {
+                        mainWindow?.webContents.send('key-recorded', e.keycode);
+                    } else {
+                        console.log('[Recorder] Ignored non-modifier:', e.keycode);
+                    }
+                    return;
+                }
+
+                // Panic Stop
+                if (e.keycode === UiohookKey.Escape) {
+                    console.log('[Shortcut] Panic Stop Triggered');
+                    mainWindow?.webContents.send('panic-stop');
+                    return;
+                }
+
+                // Normal Trigger Logic
+                const keyMap = shortcutConfig.mode === 'numpad' ? NUMPAD_KEY_MAP : STANDARD_KEY_MAP;
+                const number = keyMap[e.keycode];
+
+                if (number) {
+                    const currentModifiers = Array.from(pressedKeys).filter(k => MODIFIER_KEYS.has(k));
+                    const matchedPage = shortcutConfig.pages.find(page =>
+                        areKeysEqual(page.modifierKeys, currentModifiers)
+                    );
+
+                    if (matchedPage) {
+                        const slot = NUMPAD_TO_SLOT[number];
+                        if (slot !== undefined) {
+                            mainWindow?.webContents.send('trigger-sound', {
+                                pageId: matchedPage.id,
+                                slot,
+                            });
+                        }
+                    }
+                }
+            });
+
+            uIOhook.on('keyup', (e) => {
+                pressedKeys.delete(e.keycode);
+            });
+
+            uIOhook.start();
+            console.log('[Main] Global hooks started');
+        } catch (e) {
+            console.error('[Main] Failed to start uiohook:', e);
+            useFallback = true;
         }
-    });
+    }
 
-    uIOhook.on('keyup', (e) => {
-        pressedKeys.delete(e.keycode);
-    });
-
-    uIOhook.start();
-    console.log('[Main] Global hooks started');
+    if (useFallback) {
+        console.log('[Main] Using Wayland/Fallback shortcuts');
+        setTimeout(() => {
+            mainWindow?.webContents.send('wayland-warning');
+        }, 2000);
+        registerFallbackShortcuts();
+    }
 };
 
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
@@ -380,13 +436,15 @@ const setupIpcHandlers = () => {
         return await linuxAudio.createSink();
     });
 
-    // Receive shortcut configuration
     ipcMain.on('set-shortcut-config', (_event, config) => {
         shortcutConfig = {
             mode: config.mode || 'numpad',
             pages: config.pages || [],
         };
         console.log('[Shortcuts] Config updated:', shortcutConfig.pages.length, 'pages');
+        if (useFallback) {
+            registerFallbackShortcuts();
+        }
     });
 
     // Key Recording IPC
@@ -394,11 +452,17 @@ const setupIpcHandlers = () => {
         console.log('[Recorder] Started recording');
         isRecording = true;
         pressedKeys.clear(); // Reset to avoid stuck keys
+        if (useFallback) {
+            globalShortcut.unregisterAll();
+        }
     });
 
     ipcMain.on('stop-recording-keys', () => {
         console.log('[Recorder] Stopped recording');
         isRecording = false;
+        if (useFallback) {
+            registerFallbackShortcuts();
+        }
     });
 
     // Logging Bridge
@@ -409,7 +473,20 @@ const setupIpcHandlers = () => {
 
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
+if (process.platform === 'linux') {
+    app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
+}
+
 app.on('ready', () => {
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+        const allowedPermissions = ['media', 'audioCapture'];
+        if (allowedPermissions.includes(permission)) {
+            callback(true);
+        } else {
+            callback(false);
+        }
+    });
+
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
