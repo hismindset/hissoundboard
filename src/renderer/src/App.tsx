@@ -41,19 +41,25 @@ const App: React.FC = () => {
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
 
-    // Init Audio Controller with saved settings
+    // Init Audio Controller with saved settings.
+    // IMPORTANT: this runs the full init (including microphone passthrough) on
+    // every launch, so a previously selected mic is re-activated automatically.
     useEffect(() => {
-        audioController.setMonitorVolume(audioSettings.monitorVolume);
-        audioController.setOutputVolume(audioSettings.outputVolume);
-        audioController.setMonitorMuted(audioSettings.monitorMuted);
-        audioController.setOutputMuted(audioSettings.outputMuted);
-
-        if (audioSettings.monitorDeviceId) {
-            audioController.setMonitorDevice(audioSettings.monitorDeviceId);
-        }
-        if (audioSettings.outputDeviceId) {
-            audioController.setOutputDevice(audioSettings.outputDeviceId);
-        }
+        let cancelled = false;
+        (async () => {
+            // Determine platform first so the controller can pick the right mic strategy.
+            try {
+                const platform = await window.api.getPlatform?.();
+                if (platform) audioController.setPlatform(platform);
+            } catch (err) {
+                console.warn('[App] Could not determine platform:', err);
+            }
+            if (cancelled) return;
+            await audioController.init(audioSettings);
+        })();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // Subscribe to store changes to update AudioController in real-time

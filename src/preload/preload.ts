@@ -79,9 +79,16 @@ const api = {
     /** Set custom sounds directory */
     setSoundsDir: (dir: string) => ipcRenderer.send('set-sounds-dir', dir),
 
-    /** Create Linux Virtual Sink (PulseAudio) */
+    /** Create Linux Virtual Sink + mic loopback (PulseAudio / PipeWire) */
     createVirtualSink: (): Promise<{ success: boolean; error?: string }> =>
         ipcRenderer.invoke('create-virtual-sink'),
+
+    /** Get the host platform ('darwin' | 'win32' | 'linux') */
+    getPlatform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke('get-platform'),
+
+    /** Copy text to the system clipboard via the main process */
+    copyToClipboard: (text: string): Promise<boolean> =>
+        ipcRenderer.invoke('copy-to-clipboard', text),
 
     // ─── Shortcut Config & Recording ─────────────────────────────────────────
 

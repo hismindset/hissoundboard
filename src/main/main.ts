@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut, clipboard } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
@@ -147,6 +147,25 @@ appServer.get('/api/sounds', (_req, res) => {
     ipcMain.once('sounds-for-remote', (_event, sounds) => {
         res.json(sounds);
     });
+});
+
+// ─── Trigger Endpoints (for OS-level / Wayland global shortcuts, Stream Deck, etc.) ──
+// Lets any external tool play a sound via a simple HTTP GET, e.g. bound to a
+// KDE custom shortcut: curl "http://localhost:8080/api/trigger/<pageId>/<slot>"
+appServer.get('/api/trigger/:pageId/:slot', (req, res) => {
+    const { pageId } = req.params;
+    const slot = Number(req.params.slot);
+    if (!pageId || Number.isNaN(slot)) {
+        res.status(400).json({ ok: false, error: 'pageId and numeric slot required' });
+        return;
+    }
+    mainWindow?.webContents.send('trigger-sound', { pageId, slot });
+    res.json({ ok: true, pageId, slot });
+});
+
+appServer.get('/api/panic', (_req, res) => {
+    mainWindow?.webContents.send('panic-stop');
+    res.json({ ok: true });
 });
 
 // ─── Helper: Get local IP ────────────────────────────────────────────────────
@@ -430,10 +449,19 @@ const setupIpcHandlers = () => {
         }
     });
 
-    // Linux Virtual Sink
+    // Expose the host platform to the renderer so audio routing can adapt.
+    ipcMain.handle('get-platform', () => process.platform);
+
+    // Native clipboard write (navigator.clipboard is blocked by our permission handler).
+    ipcMain.handle('copy-to-clipboard', (_event, text: string) => {
+        clipboard.writeText(String(text ?? ''));
+        return true;
+    });
+
+    // Linux Virtual Sink + automatic OS-level mic mixing
     ipcMain.handle('create-virtual-sink', async () => {
         if (process.platform !== 'linux') return { success: false, error: 'Not supported on this OS' };
-        return await linuxAudio.createSink();
+        return await linuxAudio.setupAutoMix();
     });
 
     ipcMain.on('set-shortcut-config', (_event, config) => {
@@ -492,7 +520,7 @@ app.on('ready', () => {
     createWindow();
     setupGlobalHooks();
 
-    // Linux Specific Startup
+    // Linux Specific Startup: create virtual sink + loop the mic into it (OS-level mixing)
     linuxAudio.ensureAudioSink();
 
     server.listen(SERVER_PORT, '0.0.0.0', () => {
@@ -514,6 +542,11 @@ app.on('activate', () => {
     }
 });
 
-app.on('will-quit', () => {
+app.on('will-quit', (event) => {
     uIOhook.stop();
+    // Clean up Linux virtual audio modules so we don't leak devices across restarts.
+    if (process.platform === 'linux') {
+        event.preventDefault();
+        linuxAudio.teardown().finally(() => app.exit(0));
+    }
 });

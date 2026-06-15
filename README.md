@@ -4,13 +4,43 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 
 ## ✨ Features
 
-- **Dynamic Pages**: Create, rename, delete, and organize your sounds across unlimited pages.
-- **Dual Audio Output**: Route sounds to your headphones (Monitor) and a virtual cable (Output) simultaneously with independent volume controls.
-- **Global Hotkeys**: Trigger sounds from anywhere, even when the app is minimized. Supports modifiers (Ctrl, Alt, Shift).
-- **Remote Control**: Control your soundboard from any phone or tablet on your local network. Now supports page navigation!
-- **Audio Setup Wizard**: Built-in guide to help you configure virtual audio devices on Windows, macOS, and Linux.
-- **Smart Drag & Drop**: Easily add sounds to your library and arrange them on the grid.
-- **Dark Mode UI**: Sleek, gaming-inspired interface.
+<details>
+<summary><b>Click to expand the full feature list</b></summary>
+
+### 🎛️ Soundboard & Pages
+- **Numpad-style 3×3 grid**: "Just drag in and go" layout designed for muscle memory.
+- **Dynamic pages**: Create, rename, delete, and organize sounds across unlimited pages.
+- **Per-sound editing**: Adjust per-sound volume (up to 200%), trim start/end, and choose a playback mode (one-shot or loop).
+- **Stop All / Panic**: Instantly stop every playing sound (button or `Escape`).
+
+### 🔊 Audio
+- **Dual audio output**: Play each sound to your headphones (Monitor) *and* a virtual cable (Output) at the same time, with independent volume and mute per side.
+- **Microphone injection (passthrough)**: Route your hardware mic into the Output cable so voice chat hears your voice + sounds through a single virtual microphone.
+- **Audio Setup Wizard**: Cross-platform guide that detects virtual audio devices and, on Linux, can auto-create a PulseAudio null sink.
+- **48 kHz audio engine**: Fixed sample rate for consistent routing across devices.
+
+### ⌨️ Shortcuts (Global)
+- **Global hotkeys**: Trigger sounds even when the app is minimized.
+- **Numpad or Standard (1–9) modes**.
+- **Per-page modifiers**: Combine with Ctrl / Alt / Shift to address different pages.
+- **Key recorder**: Click-to-assign modifier combinations.
+- **Wayland fallback**: Automatically switches to Electron's global shortcuts on Wayland (with a heads-up notice).
+
+### 📱 Remote Control
+- **Phone/tablet remote**: Built-in web server (port 8080) + WebSocket; control sounds from any device on your LAN.
+- **QR code pairing** and **page navigation** from the remote.
+
+### 📂 Library & Files
+- **Smart drag & drop** to add sounds and arrange the grid.
+- **Download from URL** directly into your library.
+- **Custom sounds directory** (or use the default app data folder).
+
+### 🎨 Interface
+- **Dark, gaming-inspired UI** with waveform previews (wavesurfer.js).
+
+</details>
+
+> Cross-platform desktop app built with **Electron + React + TypeScript** — runs on Windows, macOS, and Linux.
 
 ---
 

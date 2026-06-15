@@ -14,6 +14,10 @@ class AudioController {
     private micSource: MediaStreamAudioSourceNode | null = null;
     private micGain: GainNode;
 
+    // Host platform. On Linux the OS (PulseAudio/PipeWire) mixes the mic into the
+    // virtual sink, so the in-app Web Audio passthrough is disabled there.
+    private platform: string = '';
+
     // Internal state mirrored from store
     private settings: AudioSettings = {
         monitorVolume: 1.0,
@@ -60,6 +64,18 @@ class AudioController {
         this.micGain = this.audioContext.createGain();
         this.micGain.gain.value = 1.0;
         this.micGain.connect(this.audioContext.destination);
+    }
+
+    /** Tell the controller which OS it runs on (affects mic routing strategy). */
+    setPlatform(platform: string) {
+        this.platform = platform;
+        this.log(`[AudioController] Platform set to: ${platform}`);
+    }
+
+    private get usesOsMicMixing(): boolean {
+        // Linux mixes the mic at the OS level (module-loopback), so the app must
+        // NOT also pass the mic through — that would double the voice.
+        return this.platform === 'linux';
     }
 
     /** Initialize controller with settings from store */
@@ -132,6 +148,14 @@ class AudioController {
 
     private async updateMicRouting() {
         this.log('[AudioController] updateMicRouting');
+
+        // On Linux the OS mixes the hardware mic into the virtual sink, so the
+        // in-app passthrough is intentionally disabled to avoid doubling the voice.
+        if (this.usesOsMicMixing) {
+            this.log('[AudioController] Skipping in-app mic passthrough (OS-level mixing active).');
+            this.stopMic();
+            return;
+        }
 
         // Ensure AudioContext is running
         if (this.audioContext.state === 'suspended') {

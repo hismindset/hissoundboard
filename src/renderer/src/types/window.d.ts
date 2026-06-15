@@ -36,6 +36,8 @@ interface ElectronApi {
     setShortcutConfig: (config: ShortcutConfig) => void;
     sendSoundsForRemote: (sounds: unknown) => void;
     createVirtualSink: () => Promise<{ success: boolean; error?: string }>;
+    getPlatform: () => Promise<'darwin' | 'win32' | 'linux' | string>;
+    copyToClipboard: (text: string) => Promise<boolean>;
 }
 
 declare global {

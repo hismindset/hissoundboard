@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import { Page } from '../types/page';
-import KeyRecorder from './KeyRecorder';
+import ModifierSelect from './ModifierSelect';
 
 const PageList: React.FC = () => {
     const pages = useSoundboardStore((s) => s.pages);
@@ -173,7 +173,7 @@ const PageList: React.FC = () => {
                                 <div className="absolute top-10 left-4 z-50">
                                     <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setRecordingId(null)} />
                                     <div className="relative z-50">
-                                        <KeyRecorder
+                                        <ModifierSelect
                                             value={page.modifierKeys}
                                             onChange={handleSaveRecording}
                                             onCancel={() => setRecordingId(null)}

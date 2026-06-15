@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import { AudioSetupWizard } from './AudioSetupWizard';
+import { WaylandShortcuts } from './WaylandShortcuts';
 
 const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // New Audio Settings Slice
@@ -11,6 +12,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]); // New state for mics
     const [showWizard, setShowWizard] = useState(false);
+    const [platform, setPlatform] = useState<string>('');
 
     const customSoundsDir = useSoundboardStore((s) => s.customSoundsDir);
     const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
@@ -54,6 +56,11 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // Load default sounds dir
     useEffect(() => {
         window.api.getSoundsDir().then((dir) => setDefaultSoundsDir(dir));
+    }, []);
+
+    // Detect host platform (affects how the microphone is mixed)
+    useEffect(() => {
+        window.api.getPlatform?.().then((p) => setPlatform(p)).catch(() => { });
     }, []);
 
     // Generate QR code
@@ -183,39 +190,60 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </div>
                 </div>
 
-                {/* Microphone Input (Passthrough) */}
+                {/* Microphone Input */}
                 <div className="mb-6 pt-2 border-t border-surface-700/50">
                     <label className="block text-xs text-surface-300 mb-1.5">
-                        🎤 Microphone Injection (Passthrough)
+                        🎤 Microphone {platform === 'linux' ? 'Mixing' : 'Injection (Passthrough)'}
                     </label>
-                    <select
-                        value={audioSettings.micDeviceId}
-                        onChange={(e) => setAudioSettings({ micDeviceId: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
-                    >
-                        <option value="">None (Disabled)</option>
-                        {micDevices.map((d) => (
-                            <option key={d.deviceId} value={d.deviceId}>
-                                {d.label || `Microphone ${d.deviceId.slice(0, 8)}`}
-                            </option>
-                        ))}
-                    </select>
-                    <div className="flex items-center gap-3 mt-2">
-                        <span className="text-xs w-8 text-surface-400">
-                            {Math.round(audioSettings.micVolume * 100)}%
-                        </span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="200" // 200% as requested
-                            value={Math.round(audioSettings.micVolume * 100)}
-                            onChange={(e) => setAudioSettings({ micVolume: Number(e.target.value) / 100 })}
-                            className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
-                        />
-                    </div>
-                    <p className="text-[10px] text-surface-500 mt-1.5">
-                        Selected microphone will be routed to the <b>Output Device</b> (Cable) only. It will NOT be heard on the Monitor device.
-                    </p>
+
+                    {platform === 'linux' ? (
+                        // On Linux the OS (PulseAudio/PipeWire) mixes the default mic into the
+                        // virtual sink automatically — no in-app passthrough needed.
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 space-y-1.5">
+                            <p className="text-xs text-green-400 font-medium">
+                                Automatic OS-level mixing is active.
+                            </p>
+                            <p className="text-[11px] text-surface-300 leading-relaxed">
+                                Your default microphone is mixed into the virtual device automatically.
+                                In your voice chat, select <b>“OpenSoundBoard_Mic”</b> as the input
+                                microphone — your voice and the sounds come through together, even when
+                                no sound is playing.
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            <select
+                                value={audioSettings.micDeviceId}
+                                onChange={(e) => setAudioSettings({ micDeviceId: e.target.value })}
+                                className="w-full px-3 py-2.5 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
+                            >
+                                <option value="">None (Disabled)</option>
+                                {micDevices.map((d) => (
+                                    <option key={d.deviceId} value={d.deviceId}>
+                                        {d.label || `Microphone ${d.deviceId.slice(0, 8)}`}
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="flex items-center gap-3 mt-2">
+                                <span className="text-xs w-8 text-surface-400">
+                                    {Math.round(audioSettings.micVolume * 100)}%
+                                </span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="200" // 200% as requested
+                                    value={Math.round(audioSettings.micVolume * 100)}
+                                    onChange={(e) => setAudioSettings({ micVolume: Number(e.target.value) / 100 })}
+                                    className="flex-1 h-1.5 rounded-full appearance-none bg-surface-700 accent-accent cursor-pointer"
+                                />
+                            </div>
+                            <p className="text-[10px] text-surface-500 mt-1.5">
+                                Select your headset mic here. It is routed to the <b>Output Device</b> (Cable)
+                                together with the sounds, so others hear your voice + sounds. You will NOT
+                                hear yourself on the Monitor (no feedback). Keep this app running while you talk.
+                            </p>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -285,6 +313,9 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     Page modifiers are now managed in the Page Sidebar.
                 </div>
             </div>
+
+            {/* Wayland / KDE global shortcut helper (Linux only) */}
+            {platform === 'linux' && <WaylandShortcuts />}
 
             {/* Remote Control */}
             <div className="space-y-3">

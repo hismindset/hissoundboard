@@ -11,6 +11,11 @@ files:
   - package.json
   # Native modules are automatically handled, but we can be explicit if needed
   # - node_modules/**/* # usually not needed as builder handles dependencies
+  # IMPORTANT: drop the host-compiled native binary so node-gyp-build falls back
+  # to the correct prebuilds/<platform>-<arch>. Without this, a macOS build/Release
+  # binary gets loaded first on Linux/Windows and crashes (cross-build safety).
+  - "!node_modules/uiohook-napi/build/**"
+  - "!node_modules/uiohook-napi/bin/**"
 
 # Unpack native modules
 asarUnpack:
@@ -27,6 +32,9 @@ mac:
   # For Apple Silicon, ad-hoc signing is required. builder does this automatically if identity is null.
   hardenedRuntime: false
   gatekeeperAssess: false
+  # Required so macOS shows the microphone permission prompt for the soundboard passthrough.
+  extendInfo:
+    NSMicrophoneUsageDescription: "OpenSoundBoard routes your microphone into voice chat together with your sounds."
 
 dmg:
   sign: false
