@@ -56,6 +56,7 @@ Not yet implemented — ideas under consideration:
 - **Horizontal layout for Standard mode**: In Standard (non-numpad) mode, lay sounds out left-to-right (e.g. 1–7) instead of a 3×3 grid.
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
+- **Auto-updater**: Check for new releases and update in place (via `electron-updater`). Note: works for Windows (NSIS) and Linux (AppImage); macOS auto-update requires a signed/notarized build.
 
 ## 📋 TODO
 
