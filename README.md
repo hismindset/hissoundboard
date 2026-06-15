@@ -50,6 +50,12 @@ Not yet implemented — ideas under consideration:
 - **Sync between devices**: Keep pages, sounds, and settings in sync across multiple machines (mechanism still open).
 - **Myinstants link support**: Add sounds directly from a [Myinstants](https://www.myinstants.com/) link, not just `.mp3` files/URLs.
 - **In-app help**: Built-in help/guide (microphone & virtual-audio setup, possibly surfacing README content) so users don't have to leave the app.
+- **Middle-click to remove**: Quickly clear a sound from a slot via middle mouse button (currently not working).
+- **Reorderable pages**: Drag to swap/rearrange page positions in the sidebar.
+- **Multi-page view on wide windows**: Show several pages side by side when the window/monitor is wide.
+- **Horizontal layout for Standard mode**: In Standard (non-numpad) mode, lay sounds out left-to-right (e.g. 1–7) instead of a 3×3 grid.
+- **More audio sources**: Support additional audio output/input sources beyond the current routing.
+- **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
 
 ## 📋 TODO
 
