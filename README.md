@@ -42,6 +42,21 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 
 > Cross-platform desktop app built with **Electron + React + TypeScript** — runs on Windows, macOS, and Linux.
 
+## 💡 Feature Ideas (Roadmap)
+
+Not yet implemented — ideas under consideration:
+
+- **Record your own sounds**: Capture audio directly from your microphone inside the app to create new soundboard clips.
+- **Sync between devices**: Keep pages, sounds, and settings in sync across multiple machines (mechanism still open).
+- **Myinstants link support**: Add sounds directly from a [Myinstants](https://www.myinstants.com/) link, not just `.mp3` files/URLs.
+- **In-app help**: Built-in help/guide (microphone & virtual-audio setup, possibly surfacing README content) so users don't have to leave the app.
+
+## 📋 TODO
+
+Concrete tasks (committed, not just ideas):
+
+- **Adapt design & branding to hismindset.**
+
 ---
 
 ## 🚀 Installation & Setup

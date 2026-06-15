@@ -56,5 +56,5 @@ linux:
 # Publish configuration (for GitHub Actions)
 publish:
   provider: github
-  owner: mAdM4x1
+  owner: hismindset
   repo: hissoundboard
