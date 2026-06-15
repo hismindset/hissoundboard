@@ -57,6 +57,8 @@ Not yet implemented — ideas under consideration:
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
 - **Auto-updater**: Check for new releases and update in place (via `electron-updater`). Note: works for Windows (NSIS) and Linux (AppImage); macOS auto-update requires a signed/notarized build.
+- **Optional fade in/out**: Smooth fade-in on start and fade-out on stop/end, configurable per sound.
+- **Improve relocation hints**: Flesh out the legacy "this moved elsewhere" notices (e.g. "Page modifiers are now managed in the Page Sidebar").
 
 ## 📋 TODO
 
@@ -65,6 +67,10 @@ Concrete tasks (committed, not just ideas):
 - **Adapt design & branding to hismindset.**
 - **Automated dependency updates**: Set up Renovate (or Dependabot) for regular, low-noise updates.
 - **Straighten out release & deployment**: Reliable, repeatable release flow including versioning (e.g. tag → CI builds → GitHub Release).
+
+## 🐞 Known Issues
+
+- **Trimmed sound occasionally starts from the beginning** after the app has been idle for a while — likely the trim seek (`currentTime = trimStart`) being applied before the audio metadata is loaded, so it is lost on a cold cache. Fix: apply the seek on `loadedmetadata`.
 
 ## ❓ Open Questions
 
