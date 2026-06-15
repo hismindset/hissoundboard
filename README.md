@@ -62,6 +62,15 @@ Not yet implemented — ideas under consideration:
 Concrete tasks (committed, not just ideas):
 
 - **Adapt design & branding to hismindset.**
+- **Automated dependency updates**: Set up Renovate (or Dependabot) for regular, low-noise updates.
+- **Straighten out release & deployment**: Reliable, repeatable release flow including versioning (e.g. tag → CI builds → GitHub Release).
+
+## ❓ Open Questions
+
+Decisions still to make:
+
+- **Tests** — worthwhile? If yes, which kind and scope? (See README maintainer notes / discuss.)
+- **Localization** — add German (i18n), or keep the UI English-only for wider open-source reach?
 
 ---
 
