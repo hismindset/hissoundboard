@@ -19,6 +19,7 @@ const PageList: React.FC = () => {
     const [recordingId, setRecordingId] = useState<string | null>(null);
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
+    const [dropPos, setDropPos] = useState<'before' | 'after' | null>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
 
     // Focus input when editing starts
@@ -75,27 +76,38 @@ const PageList: React.FC = () => {
     const handlePageDragOver = (e: React.DragEvent, id: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+        if (!dragId || id === dragId) return;
+        // Decide insert-before vs insert-after based on which half we hover.
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const pos: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
         if (id !== dragOverId) setDragOverId(id);
+        if (pos !== dropPos) setDropPos(pos);
     };
 
     const handlePageDrop = (e: React.DragEvent, targetId: string) => {
         e.preventDefault();
         const sourceId = dragId;
+        const pos = dropPos;
         setDragId(null);
         setDragOverId(null);
+        setDropPos(null);
         if (!sourceId || sourceId === targetId) return;
         const from = pages.findIndex((p) => p.id === sourceId);
-        const to = pages.findIndex((p) => p.id === targetId);
-        if (from < 0 || to < 0) return;
+        const targetIdx = pages.findIndex((p) => p.id === targetId);
+        if (from < 0 || targetIdx < 0) return;
+        const moved = pages[from];
+        let insertIdx = pos === 'after' ? targetIdx + 1 : targetIdx;
         const next = [...pages];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
+        next.splice(from, 1);
+        if (from < insertIdx) insertIdx -= 1; // account for the removed item
+        next.splice(insertIdx, 0, moved);
         updatePageOrder(next);
     };
 
     const handlePageDragEnd = () => {
         setDragId(null);
         setDragOverId(null);
+        setDropPos(null);
     };
 
     const formatKeys = (keys: number[]) => {
@@ -139,8 +151,14 @@ const PageList: React.FC = () => {
                             onDragOver={(e) => handlePageDragOver(e, page.id)}
                             onDrop={(e) => handlePageDrop(e, page.id)}
                             onDragEnd={handlePageDragEnd}
-                            className={`relative group rounded-lg transition-all duration-200 ${isActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-surface-800 border border-transparent'} ${dragId === page.id ? 'opacity-40' : ''} ${dragOverId === page.id && dragId !== page.id ? 'border-t-2 border-t-accent' : ''}`}
+                            className={`relative group rounded-lg transition-all duration-200 ${isActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-surface-800 border border-transparent'} ${dragId === page.id ? 'opacity-40' : ''} ${!isEditing && !isRecording ? 'cursor-grab active:cursor-grabbing' : ''}`}
                         >
+                            {/* Insertion indicator: shows exactly where the page will land */}
+                            {dragId && dragOverId === page.id && dragId !== page.id && (
+                                <div className={`absolute left-2 right-2 z-10 pointer-events-none ${dropPos === 'before' ? '-top-[3px]' : '-bottom-[3px]'}`}>
+                                    <div className="h-[3px] bg-accent rounded-full shadow-glow-active" />
+                                </div>
+                            )}
                             <div
                                 onClick={() => !isEditing && !isRecording && setActivePage(page.id)}
                                 className="flex items-center justify-between px-3 py-2 cursor-pointer"
