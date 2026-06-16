@@ -304,9 +304,17 @@ class AudioController {
         this.applySettingsToElements(monitorAudio, outputAudio, baseVol);
 
         // Standard setup (loop, trim, etc.)
+        // Apply the trim start only once metadata is loaded. Setting currentTime
+        // right after `new Audio()` is lost on a cold cache (metadata not ready yet),
+        // which made trimmed sounds occasionally restart from 0 after an idle period.
         if (sound.trimStart > 0) {
-            monitorAudio.currentTime = sound.trimStart;
-            outputAudio.currentTime = sound.trimStart;
+            const applyTrimStart = (el: HTMLAudioElement) => {
+                const seek = () => { el.currentTime = sound.trimStart; };
+                if (el.readyState >= 1 /* HAVE_METADATA */) seek();
+                else el.addEventListener('loadedmetadata', seek, { once: true });
+            };
+            applyTrimStart(monitorAudio);
+            applyTrimStart(outputAudio);
         }
 
         if (sound.playbackMode === 'loop') {
