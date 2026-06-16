@@ -50,15 +50,12 @@ Not yet implemented — ideas under consideration:
 - **Sync between devices**: Keep pages, sounds, and settings in sync across multiple machines (mechanism still open).
 - **Myinstants link support**: Add sounds directly from a [Myinstants](https://www.myinstants.com/) link, not just `.mp3` files/URLs.
 - **In-app help**: Built-in help/guide (microphone & virtual-audio setup, possibly surfacing README content) so users don't have to leave the app.
-- **Middle-click to remove**: Quickly clear a sound from a slot via middle mouse button (currently not working).
-- **Reorderable pages**: Drag to swap/rearrange page positions in the sidebar.
 - **Multi-page view on wide windows**: Show several pages side by side when the window/monitor is wide.
 - **Horizontal layout for Standard mode**: In Standard (non-numpad) mode, lay sounds out left-to-right (e.g. 1–7) instead of a 3×3 grid.
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
 - **Auto-updater**: Check for new releases and update in place (via `electron-updater`). Note: works for Windows (NSIS) and Linux (AppImage); macOS auto-update requires a signed/notarized build.
 - **Optional fade in/out**: Smooth fade-in on start and fade-out on stop/end, configurable per sound.
-- **Improve relocation hints**: Flesh out the legacy "this moved elsewhere" notices (e.g. "Page modifiers are now managed in the Page Sidebar").
 
 ## 📋 TODO
 
@@ -67,10 +64,6 @@ Concrete tasks (committed, not just ideas):
 - **App icon**: design a dedicated *variation* of the hismindset logo for the app/installer icon (dock, taskbar, .icns/.ico/.png) — concept not yet defined.
 - **Automated dependency updates**: Set up Renovate (or Dependabot) for regular, low-noise updates.
 - **Straighten out release & deployment**: Reliable, repeatable release flow including versioning (e.g. tag → CI builds → GitHub Release).
-
-## 🐞 Known Issues
-
-- **Trimmed sound occasionally starts from the beginning** after the app has been idle for a while — likely the trim seek (`currentTime = trimStart`) being applied before the audio metadata is loaded, so it is lost on a cold cache. Fix: apply the seek on `loadedmetadata`.
 
 ## ❓ Open Questions
 

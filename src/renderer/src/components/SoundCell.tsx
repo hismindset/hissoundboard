@@ -67,6 +67,14 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
         setShowContextMenu(true);
     }, [sound]);
 
+    // Middle-click removes the sound from this slot (prevents browser autoscroll too)
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        if (e.button === 1 && soundId) {
+            e.preventDefault();
+            unassignSlot(page, slot);
+        }
+    }, [soundId, page, slot, unassignSlot]);
+
     // ── Drag: this cell is the SOURCE (dragging a sound out) ──────────────
     const handleDragStart = useCallback((e: React.DragEvent) => {
         if (!soundId) {
@@ -159,6 +167,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                 draggable={!!sound}
                 onClick={handleClick}
                 onContextMenu={handleContextMenu}
+                onMouseDown={handleMouseDown}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}

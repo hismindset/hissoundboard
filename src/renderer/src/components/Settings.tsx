@@ -310,7 +310,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
 
                 <div className="text-xs text-surface-400 bg-surface-800/50 p-3 rounded-lg">
-                    Page modifiers are now managed in the Page Sidebar.
+                    Assign each page's trigger keys with the key icon on the page in the sidebar.
                 </div>
             </div>
 

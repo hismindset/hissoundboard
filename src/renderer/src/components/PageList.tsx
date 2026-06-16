@@ -12,10 +12,13 @@ const PageList: React.FC = () => {
     const removePage = useSoundboardStore((s) => s.removePage);
     const renamePage = useSoundboardStore((s) => s.renamePage);
     const setPageModifier = useSoundboardStore((s) => s.setPageModifier);
+    const updatePageOrder = useSoundboardStore((s) => s.updatePageOrder);
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [recordingId, setRecordingId] = useState<string | null>(null);
+    const [dragId, setDragId] = useState<string | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
 
     // Focus input when editing starts
@@ -63,6 +66,38 @@ const PageList: React.FC = () => {
         setRecordingId(null);
     };
 
+    // ── Drag & drop reordering of pages ──────────────────────────────────
+    const handlePageDragStart = (e: React.DragEvent, id: string) => {
+        setDragId(id);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handlePageDragOver = (e: React.DragEvent, id: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (id !== dragOverId) setDragOverId(id);
+    };
+
+    const handlePageDrop = (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        const sourceId = dragId;
+        setDragId(null);
+        setDragOverId(null);
+        if (!sourceId || sourceId === targetId) return;
+        const from = pages.findIndex((p) => p.id === sourceId);
+        const to = pages.findIndex((p) => p.id === targetId);
+        if (from < 0 || to < 0) return;
+        const next = [...pages];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        updatePageOrder(next);
+    };
+
+    const handlePageDragEnd = () => {
+        setDragId(null);
+        setDragOverId(null);
+    };
+
     const formatKeys = (keys: number[]) => {
         if (!keys || keys.length === 0) return '';
         // Same simple mapping
@@ -99,7 +134,12 @@ const PageList: React.FC = () => {
                     return (
                         <div
                             key={page.id}
-                            className={`relative group rounded-lg transition-all duration-200 ${isActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-surface-800 border border-transparent'}`}
+                            draggable={!isEditing && !isRecording}
+                            onDragStart={(e) => handlePageDragStart(e, page.id)}
+                            onDragOver={(e) => handlePageDragOver(e, page.id)}
+                            onDrop={(e) => handlePageDrop(e, page.id)}
+                            onDragEnd={handlePageDragEnd}
+                            className={`relative group rounded-lg transition-all duration-200 ${isActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-surface-800 border border-transparent'} ${dragId === page.id ? 'opacity-40' : ''} ${dragOverId === page.id && dragId !== page.id ? 'border-t-2 border-t-accent' : ''}`}
                         >
                             <div
                                 onClick={() => !isEditing && !isRecording && setActivePage(page.id)}
