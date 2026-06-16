@@ -74,7 +74,7 @@ export const AudioSetupWizard: React.FC<{ onClose?: () => void }> = ({ onClose }
 
                 {/* Header */}
                 <div className="text-center mb-6">
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-accent-light to-brand-sand bg-clip-text text-transparent">
                         Fast Setup
                     </h2>
                     <p className="text-white/50 text-sm mt-2">
@@ -90,7 +90,7 @@ export const AudioSetupWizard: React.FC<{ onClose?: () => void }> = ({ onClose }
                             <p className="text-white/80">
                                 OpenSoundBoard needs a <b>Virtual Audio Device</b> to route sound to apps like Discord, Teams, or OBS.
                             </p>
-                            <button onClick={scanDevices} className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 font-semibold transition-colors">
+                            <button onClick={scanDevices} className="w-full py-3 rounded-xl bg-accent hover:bg-accent-light font-semibold transition-colors">
                                 Scan for Devices
                             </button>
                         </div>
@@ -115,14 +115,14 @@ export const AudioSetupWizard: React.FC<{ onClose?: () => void }> = ({ onClose }
                                     {platform === 'win' && (
                                         <div className="text-center text-sm text-white/70">
                                             Please install <b>VB-Cable</b> (Simples & Free).
-                                            <a href="https://vb-audio.com/Cable/" target="_blank" className="block mt-2 text-violet-400 hover:underline">Download VB-Cable</a>
+                                            <a href="https://vb-audio.com/Cable/" target="_blank" className="block mt-2 text-accent-light hover:underline">Download VB-Cable</a>
                                         </div>
                                     )}
 
                                     {platform === 'mac' && (
                                         <div className="text-center text-sm text-white/70">
                                             Please install <b>BlackHole</b>.
-                                            <a href="https://github.com/ExistentialAudio/BlackHole" target="_blank" className="block mt-2 text-violet-400 hover:underline">Download BlackHole</a>
+                                            <a href="https://github.com/ExistentialAudio/BlackHole" target="_blank" className="block mt-2 text-accent-light hover:underline">Download BlackHole</a>
                                         </div>
                                     )}
 
@@ -156,7 +156,7 @@ export const AudioSetupWizard: React.FC<{ onClose?: () => void }> = ({ onClose }
                             <p className="text-white/60 text-sm">
                                 Don't forget to select <b>"{audioSettings.outputDeviceId ? 'Your Virtual Device' : 'Default'}"</b> as your Microphone in Discord/Teams!
                             </p>
-                            <button onClick={finish} className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 font-semibold transition-colors">
+                            <button onClick={finish} className="w-full py-3 rounded-xl bg-accent hover:bg-accent-light font-semibold transition-colors">
                                 Let's Go!
                             </button>
                         </div>

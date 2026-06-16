@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut, clipboard, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
@@ -456,6 +456,15 @@ const setupIpcHandlers = () => {
     ipcMain.handle('copy-to-clipboard', (_event, text: string) => {
         clipboard.writeText(String(text ?? ''));
         return true;
+    });
+
+    // Open a URL in the user's default browser (e.g. the hismindset website link).
+    ipcMain.handle('open-external', (_event, url: string) => {
+        if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+            shell.openExternal(url);
+            return true;
+        }
+        return false;
     });
 
     // Linux Virtual Sink + automatic OS-level mic mixing

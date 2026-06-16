@@ -20,6 +20,8 @@
         "postinstall": "electron-builder install-app-deps"
     },
     "dependencies": {
+        "@fontsource/inter": "^5.2.8",
+        "@fontsource/jost": "^5.2.8",
         "electron-squirrel-startup": "^1.0.1",
         "express": "^4.21.2",
         "howler": "^2.2.4",

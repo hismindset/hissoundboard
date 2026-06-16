@@ -233,7 +233,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                         </div>
                                         <div className="flex items-center gap-1.5 mt-0.5">
                                             <span className={`text-[9px] font-medium uppercase tracking-wider px-1.5 py-0 rounded-full ${sound.playbackMode === 'loop'
-                                                ? 'bg-neon-purple/15 text-neon-purple/80'
+                                                ? 'bg-accent/15 text-accent-light/80'
                                                 : 'bg-neon-blue/10 text-neon-blue/60'
                                                 }`}>
                                                 {sound.playbackMode}

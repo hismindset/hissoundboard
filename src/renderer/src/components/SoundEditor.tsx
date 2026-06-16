@@ -34,9 +34,9 @@ const SoundEditor: React.FC<SoundEditorProps> = ({ soundId, onClose }) => {
 
         const ws = WaveSurfer.create({
             container: waveformRef.current,
-            waveColor: 'rgba(139, 92, 246, 0.4)',
-            progressColor: 'rgba(139, 92, 246, 0.8)',
-            cursorColor: '#a78bfa',
+            waveColor: 'rgba(92, 174, 107, 0.35)',
+            progressColor: 'rgba(63, 154, 77, 0.9)',
+            cursorColor: '#d4a373',
             barWidth: 2,
             barGap: 1,
             barRadius: 2,
@@ -58,7 +58,7 @@ const SoundEditor: React.FC<SoundEditorProps> = ({ soundId, onClose }) => {
             const region = regions.addRegion({
                 start,
                 end,
-                color: 'rgba(139, 92, 246, 0.15)',
+                color: 'rgba(63, 154, 77, 0.18)',
                 drag: true,
                 resize: true,
             });
@@ -206,7 +206,7 @@ const SoundEditor: React.FC<SoundEditorProps> = ({ soundId, onClose }) => {
                                 <button
                                     onClick={() => setPlaybackMode('loop')}
                                     className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${playbackMode === 'loop'
-                                        ? 'bg-neon-purple/20 text-neon-purple border border-neon-purple/30'
+                                        ? 'bg-accent/20 text-accent-light border border-accent/30'
                                         : 'bg-surface-800 text-surface-400 border border-surface-600/30 hover:text-surface-200'
                                         }`}
                                 >

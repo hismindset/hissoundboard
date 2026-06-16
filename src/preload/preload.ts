@@ -90,6 +90,10 @@ const api = {
     copyToClipboard: (text: string): Promise<boolean> =>
         ipcRenderer.invoke('copy-to-clipboard', text),
 
+    /** Open a URL in the user's default browser */
+    openExternal: (url: string): Promise<boolean> =>
+        ipcRenderer.invoke('open-external', url),
+
     // ─── Shortcut Config & Recording ─────────────────────────────────────────
 
     /** Send shortcut configuration to main process */

@@ -38,6 +38,7 @@ interface ElectronApi {
     createVirtualSink: () => Promise<{ success: boolean; error?: string }>;
     getPlatform: () => Promise<'darwin' | 'win32' | 'linux' | string>;
     copyToClipboard: (text: string) => Promise<boolean>;
+    openExternal: (url: string) => Promise<boolean>;
 }
 
 declare global {

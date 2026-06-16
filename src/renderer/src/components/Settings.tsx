@@ -69,7 +69,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             const url = `http://${ip}:${port}`;
             setServerUrl(url);
             setQrCodeUrl(
-                `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}&bgcolor=0d0e1f&color=a78bfa`
+                `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}&bgcolor=121712&color=5cae6b`
             );
         });
     }, []);
@@ -154,7 +154,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Output Device (To Mic)</label>
                         <button
                             onClick={() => setShowWizard(true)}
-                            className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs font-bold hover:bg-violet-500 hover:text-white transition-colors"
+                            className="w-5 h-5 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-xs font-bold hover:bg-accent-light hover:text-white transition-colors"
                             title="Help me setup virtual audio"
                         >
                             ?

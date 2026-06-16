@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import { Page } from '../types/page';
 import ModifierSelect from './ModifierSelect';
+import logoUrl from '../assets/hismindset_white.png';
 
 const PageList: React.FC = () => {
     const pages = useSoundboardStore((s) => s.pages);
@@ -186,6 +187,18 @@ const PageList: React.FC = () => {
                     );
                 })}
             </div>
+
+            {/* hismindset brand footer (subtle, opens the website) */}
+            <button
+                onClick={() => window.api.openExternal?.('https://hismindset.de')}
+                title="hismindset.de öffnen"
+                className="group flex items-center gap-2 px-4 py-3 border-t border-surface-800 opacity-60 hover:opacity-100 transition-opacity"
+            >
+                <img src={logoUrl} alt="hismindset" className="w-6 h-6 object-contain shrink-0" />
+                <span className="text-[10px] text-surface-400 group-hover:text-accent-light tracking-[0.15em] uppercase">
+                    by hismindset
+                </span>
+            </button>
         </div>
     );
 };

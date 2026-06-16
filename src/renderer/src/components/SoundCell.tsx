@@ -170,7 +170,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                     ${isDragOver
                         ? 'bg-accent/10 border-2 border-accent/60 scale-[1.05]'
                         : isActive
-                            ? 'bg-gradient-to-br from-accent/30 to-neon-purple/20 border-2 border-accent-glow animate-pulse-glow scale-[1.02]'
+                            ? 'bg-gradient-to-br from-accent/30 to-accent/20 border-2 border-accent-glow animate-pulse-glow scale-[1.02]'
                             : sound
                                 ? 'bg-gradient-to-br from-surface-700 to-surface-800 border border-surface-600/50 hover:border-accent/50 hover:shadow-glow-purple hover:scale-[1.03]'
                                 : 'bg-surface-800/60 border-2 border-dashed border-surface-600/40 hover:border-accent/40 hover:bg-surface-700/40'
@@ -187,7 +187,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                         <span className="text-sm font-semibold text-white/90 text-center px-2 leading-tight max-w-full truncate">
                             {sound.displayName}
                         </span>
-                        <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full ${sound.playbackMode === 'loop' ? 'bg-neon-purple/20 text-neon-purple' : 'bg-neon-blue/15 text-neon-blue/80'}`}>
+                        <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full ${sound.playbackMode === 'loop' ? 'bg-accent/20 text-accent-light' : 'bg-neon-blue/15 text-neon-blue/80'}`}>
                             {sound.playbackMode}
                         </span>
                         {sound.volume !== 1.0 && (

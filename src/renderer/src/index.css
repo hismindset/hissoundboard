@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
+/* Fonts are bundled via @fontsource (imported in main.tsx) — no external CDN. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,8 +19,14 @@ html, body, #root {
 }
 
 body {
-  background-color: #080912;
-  color: #e8eaf6;
+  background-color: #0c100d;
+  color: #e7ece8;
+}
+
+/* Brand headings use Jost */
+h1, h2, h3 {
+  font-family: 'Jost', 'Inter', sans-serif;
+  letter-spacing: 0.01em;
 }
 
 /* Scrollbar styling */
@@ -34,12 +39,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.3);
+  background: rgba(63, 154, 77, 0.3);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.5);
+  background: rgba(63, 154, 77, 0.5);
 }
 
 /* Select dropdown styling */
@@ -53,21 +58,21 @@ select {
 }
 
 select option {
-  background-color: #13152e;
-  color: #e8eaf6;
+  background-color: #1a211c;
+  color: #e7ece8;
 }
 
 /* Focus ring */
 *:focus-visible {
-  outline: 2px solid rgba(139, 92, 246, 0.5);
+  outline: 2px solid rgba(63, 154, 77, 0.5);
   outline-offset: 2px;
 }
 
 /* Drag and drop animations */
 .drag-over {
   transform: scale(1.05);
-  border-color: rgba(139, 92, 246, 0.8) !important;
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+  border-color: rgba(63, 154, 77, 0.8) !important;
+  box-shadow: 0 0 30px rgba(63, 154, 77, 0.4);
 }
 
 /* Keyboard shortcut badges */

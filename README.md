@@ -64,7 +64,7 @@ Not yet implemented — ideas under consideration:
 
 Concrete tasks (committed, not just ideas):
 
-- **Adapt design & branding to hismindset.**
+- **App icon**: design a dedicated *variation* of the hismindset logo for the app/installer icon (dock, taskbar, .icns/.ico/.png) — concept not yet defined.
 - **Automated dependency updates**: Set up Renovate (or Dependabot) for regular, low-noise updates.
 - **Straighten out release & deployment**: Reliable, repeatable release flow including versioning (e.g. tag → CI builds → GitHub Release).
 
