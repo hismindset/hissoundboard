@@ -47,6 +47,7 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 Not yet implemented — ideas under consideration:
 
 - **Record your own sounds**: Capture audio directly from your microphone inside the app to create new soundboard clips.
+- **Preview-play in the Library**: Audition sounds (small play button) in the library to pick the ones you want before placing them on the board.
 - **Sync between devices**: Keep pages, sounds, and settings in sync across multiple machines (mechanism still open).
 - **Myinstants link support**: Add sounds directly from a [Myinstants](https://www.myinstants.com/) link, not just `.mp3` files/URLs.
 - **In-app help**: Built-in help/guide (microphone & virtual-audio setup, possibly surfacing README content) so users don't have to leave the app.
