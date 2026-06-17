@@ -1,6 +1,6 @@
 {
-    "name": "opensoundboard",
-    "productName": "OpenSoundBoard",
+    "name": "hissoundboard",
+    "productName": "HIS SoundBoard",
     "version": "1.0.0",
     "description": "A modern, dark-themed soundboard application with dual audio output, global shortcuts, and remote control.",
     "author": "Florian Göhring",

@@ -1,5 +1,5 @@
-appId: com.opensoundboard.app
-productName: OpenSoundBoard
+appId: com.hismindset.hissoundboard
+productName: HIS SoundBoard
 directories:
   output: release
   buildResources: resources
@@ -34,7 +34,7 @@ mac:
   gatekeeperAssess: false
   # Required so macOS shows the microphone permission prompt for the soundboard passthrough.
   extendInfo:
-    NSMicrophoneUsageDescription: "OpenSoundBoard routes your microphone into voice chat together with your sounds."
+    NSMicrophoneUsageDescription: "HIS SoundBoard routes your microphone into voice chat together with your sounds."
 
 dmg:
   sign: false
@@ -46,7 +46,7 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  shortcutName: OpenSoundBoard
+  shortcutName: HIS SoundBoard
 
 linux:
   target: AppImage

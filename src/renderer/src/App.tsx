@@ -7,6 +7,7 @@ import SoundEditor from './components/SoundEditor';
 import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
+import wordmark from './assets/his_soundboard_logo.png';
 
 type View = 'grid' | 'settings';
 
@@ -186,10 +187,7 @@ const App: React.FC = () => {
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
             >
                 <div className="flex items-center gap-2 pl-16">
-                    <div className="w-2 h-2 rounded-full bg-accent-glow animate-pulse" />
-                    <span className="text-xs font-bold text-surface-300 uppercase tracking-[0.2em]">
-                        OpenSoundBoard
-                    </span>
+                    <img src={wordmark} alt="HIS SoundBoard" className="h-6 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                     <button

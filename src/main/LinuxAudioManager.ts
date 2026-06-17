@@ -7,11 +7,11 @@ const execAsync = promisify(exec);
  * LinuxAudioManager sets up true OS-level mixing on PulseAudio / PipeWire.
  *
  * Concept:
- *   1. Create a virtual null sink ("OpenSoundBoard_Output").
+ *   1. Create a virtual null sink ("HISSoundBoard_Output").
  *      The app plays soundboard audio into this sink.
  *   2. Loop the user's real hardware microphone INTO the same sink
  *      (module-loopback). PulseAudio mixes mic + sounds automatically.
- *   3. The sink's monitor source ("OpenSoundBoard_Output.monitor") now
+ *   3. The sink's monitor source ("HISSoundBoard_Output.monitor") now
  *      carries voice + sounds. The user selects it as the input device in
  *      Discord/Teams/etc.
  *
@@ -19,10 +19,10 @@ const execAsync = promisify(exec);
  * in-app Web Audio passthrough and no added latency.
  */
 export class LinuxAudioManager {
-    private static SINK_NAME = 'OpenSoundBoard_Output';
-    private static PROPS = 'device.description=OpenSoundBoard_Virtual_Mic';
+    private static SINK_NAME = 'HISSoundBoard_Output';
+    private static PROPS = 'device.description=HISSoundBoard_Virtual_Mic';
     // The remapped capture source — this is what shows up as a real microphone in apps.
-    private static SOURCE_NAME = 'OpenSoundBoard_Mic';
+    private static SOURCE_NAME = 'HISSoundBoard_Mic';
 
     // Module IDs we created, so we can unload them cleanly on quit.
     private sinkModuleId: string | null = null;

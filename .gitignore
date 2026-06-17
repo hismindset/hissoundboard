@@ -33,3 +33,7 @@ out
 
 # Builder output
 release
+
+# Design source files (Affinity, etc.) — keep exported PNGs only
+*.af
+*~lock~

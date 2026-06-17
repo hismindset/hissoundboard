@@ -13,7 +13,28 @@ import { LinuxAudioManager } from './LinuxAudioManager';
 
 const linuxAudio = new LinuxAudioManager();
 
-console.log('[Main] Starting OpenSoundBoard...');
+console.log('[Main] Starting HIS SoundBoard...');
+
+// One-time migration: the app was renamed OpenSoundBoard -> HIS SoundBoard, which
+// changes Electron's userData directory. Copy the old data (pages/sounds/localStorage)
+// into the new location once so users don't lose their board after the rebrand.
+const migrateLegacyUserData = () => {
+    try {
+        const newDir = app.getPath('userData');
+        const legacyDir = path.join(app.getPath('appData'), 'OpenSoundBoard');
+        if (legacyDir === newDir) return;
+        if (!fs.existsSync(legacyDir)) return;
+        // Only migrate if the new profile hasn't been initialised yet.
+        if (fs.existsSync(path.join(newDir, 'Local Storage'))) return;
+        fs.cpSync(legacyDir, newDir, { recursive: true, force: false, errorOnExist: false });
+        console.log('[Main] Migrated user data from legacy OpenSoundBoard profile.');
+    } catch (err) {
+        console.error('[Main] userData migration failed:', err);
+    }
+};
+
+// Run before anything touches the session/userData (must happen before app 'ready').
+migrateLegacyUserData();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (squirrelStartup) {

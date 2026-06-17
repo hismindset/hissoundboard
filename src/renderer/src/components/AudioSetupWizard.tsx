@@ -3,7 +3,7 @@ import { useSoundboardStore } from '../lib/store';
 
 // Helper to check if device looks like a virtual cable
 const isVirtualDevice = (label: string) => {
-    const keywords = ['CABLE', 'VB-Audio', 'BlackHole', 'VoiceMeeter', 'Virtual', 'OpenSoundBoard'];
+    const keywords = ['CABLE', 'VB-Audio', 'BlackHole', 'VoiceMeeter', 'Virtual', 'HISSoundBoard'];
     return keywords.some(k => label.includes(k));
 };
 
@@ -88,7 +88,7 @@ export const AudioSetupWizard: React.FC<{ onClose?: () => void }> = ({ onClose }
                     {step === 'intro' && (
                         <div className="text-center space-y-4">
                             <p className="text-white/80">
-                                OpenSoundBoard needs a <b>Virtual Audio Device</b> to route sound to apps like Discord, Teams, or OBS.
+                                HIS SoundBoard needs a <b>Virtual Audio Device</b> to route sound to apps like Discord, Teams, or OBS.
                             </p>
                             <button onClick={scanDevices} className="w-full py-3 rounded-xl bg-accent hover:bg-accent-light font-semibold transition-colors">
                                 Scan for Devices

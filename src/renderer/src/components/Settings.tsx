@@ -205,7 +205,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             </p>
                             <p className="text-[11px] text-surface-300 leading-relaxed">
                                 Your default microphone is mixed into the virtual device automatically.
-                                In your voice chat, select <b>“OpenSoundBoard_Mic”</b> as the input
+                                In your voice chat, select <b>“HISSoundBoard_Mic”</b> as the input
                                 microphone — your voice and the sounds come through together, even when
                                 no sound is playing.
                             </p>

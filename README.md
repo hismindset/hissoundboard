@@ -1,4 +1,4 @@
-# OpenSoundBoard
+# HIS SoundBoard
 
 A modern, open-source soundboard application built with Electron, React, and TypeScript. Designed for gamers, streamers, and podcasters, it features dual audio output (monitor + voice chat), global hotkeys, dynamic pages, and a mobile remote control.
 
@@ -78,7 +78,7 @@ Decisions still to make:
 ## 🚀 Installation & Setup
 
 ### 1. Prerequisites (Virtual Audio)
-To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Audio Device**. OpenSoundBoard acts as a source, playing audio into this "virtual microphone".
+To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Audio Device**. HIS SoundBoard acts as a source, playing audio into this "virtual microphone".
 
 | OS | Recommended Software | Link |
 | :--- | :--- | :--- |
@@ -87,27 +87,27 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 | **Linux** | PulseAudio Null Sink | *Built-in (App provides auto-setup)* |
 
 **After installing:**
-1. Open **OpenSoundBoard Settings** (or use the Setup Wizard).
+1. Open **HIS SoundBoard Settings** (or use the Setup Wizard).
 2. Set **Output Device** to *CABLE Input* (Windows) or *BlackHole* (macOS).
 3. In your Voice Chat App (e.g., Discord), set **Input Device** to *CABLE Output* or *BlackHole*.
 
 ### 2. Install the App
 
 #### Windows
-- **Installer:** Download `OpenSoundBoard-Setup.exe` and run it.
-- **Portable:** Download the `.zip`, extract, and run `OpenSoundBoard.exe`.
+- **Installer:** Download `HIS SoundBoard-Setup.exe` and run it.
+- **Portable:** Download the `.zip`, extract, and run `HIS SoundBoard.exe`.
 
 #### macOS
-- **Installer:** Download the `.dmg`, open it, and drag `OpenSoundBoard` to Applications.
+- **Installer:** Download the `.dmg`, open it, and drag `HIS SoundBoard` to Applications.
 - **Portable:** Download the `.zip`, extract, and run.
 
 > **Note:** Since this app is not signed with an Apple Developer ID, you may need to run this command if it says "App is damaged":
 > ```bash
-> xattr -cr /Applications/OpenSoundBoard.app
+> xattr -cr "/Applications/HIS SoundBoard.app"
 > ```
 
 #### Linux
-- **Debian/Ubuntu:** Download `.deb` and run `sudo dpkg -i OpenSoundBoard*.deb`.
+- **Debian/Ubuntu:** Download `.deb` and run `sudo dpkg -i HIS SoundBoard*.deb`.
 - **Fedora/RHEL:** Download `.rpm` and install.
 - **AppImage:** Download `.AppImage`, make it executable (`chmod +x`), and run.
 
