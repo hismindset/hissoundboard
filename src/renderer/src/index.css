@@ -1,7 +1,6 @@
 /* Fonts are bundled via @fontsource (imported in main.tsx) — no external CDN. */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../../tailwind.config.js";
 
 * {
   margin: 0;
