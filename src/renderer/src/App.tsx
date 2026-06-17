@@ -179,6 +179,12 @@ const App: React.FC = () => {
         };
     }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, getAllSoundsForRemote, setShowWaylandWarning]);
 
+    // Push the current board to connected remotes whenever it changes, so the
+    // remote stays in sync after edits and reliably receives data after connecting.
+    useEffect(() => {
+        window.api?.sendSoundsForRemote?.(getAllSoundsForRemote());
+    }, [library, grid, pages, activePageId, getAllSoundsForRemote]);
+
     return (
         <div className="dark h-screen w-screen bg-surface-950 text-white flex flex-col overflow-hidden">
             {/* Titlebar drag region */}

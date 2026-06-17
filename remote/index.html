@@ -4,24 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>HIS SoundBoard Remote</title>
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="theme-color" content="#0c100d">
     <style>
         :root {
-            --bg-color: #0d0e1f;
-            --surface-color: #1a1b2e;
-            --surface-highlight: #25263a;
-            --accent-color: #8b5cf6;
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
+            --bg-color: #0c100d;
+            --surface-color: #1a211c;
+            --surface-highlight: #232c26;
+            --accent-color: #2a6c33;
+            --accent-light: #5cae6b;
+            --text-primary: #e7ece8;
+            --text-secondary: #8a9a8f;
             --safe-area-top: env(safe-area-inset-top);
             --safe-area-bottom: env(safe-area-inset-bottom);
         }
 
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             height: 100vh;
@@ -40,6 +42,7 @@
             align-items: center;
             flex-shrink: 0;
         }
+        .wordmark { height: 24px; width: auto; object-fit: contain; display: block; }
 
         .status {
             font-size: 10px;
@@ -49,7 +52,7 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
-        .status.connected { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .status.connected { background: rgba(63, 154, 77, 0.2); color: var(--accent-light); }
         .status.disconnected { background: rgba(239, 68, 68, 0.2); color: #f87171; }
 
         /* PAGE NAVIGATION */
@@ -80,7 +83,7 @@
             background: var(--accent-color);
             color: white;
             border-color: var(--accent-color);
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            box-shadow: 0 4px 12px rgba(63, 154, 77, 0.3);
         }
 
         /* GRID */
@@ -117,7 +120,7 @@
         }
         .cell:active { transform: scale(0.96); }
         .cell.has-sound { background: linear-gradient(145deg, var(--surface-highlight), var(--surface-color)); }
-        .cell.active { border-color: var(--accent-color); box-shadow: inset 0 0 20px rgba(139,92,246,0.2); }
+        .cell.active { border-color: var(--accent-color); box-shadow: inset 0 0 20px rgba(63,154,77,0.2); }
 
         .cell-label {
             font-size: 13px;
@@ -143,8 +146,7 @@
 
         /* PANIC BAR */
         .panic-bar {
-            padding: 16px;
-            padding-bottom: calc(16px + var(--safe-area-bottom));
+            padding: 16px 16px 12px;
             background: var(--surface-color);
             border-top: 1px solid rgba(255,255,255,0.05);
             flex-shrink: 0;
@@ -165,12 +167,37 @@
         }
         .panic-btn:active { transform: scale(0.98); }
 
+        /* FOOTER: hismindset ad anchor */
+        .footer {
+            padding: 10px 16px calc(12px + var(--safe-area-bottom));
+            background: var(--surface-color);
+            display: flex;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .footer a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0.6;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        .footer a:active { opacity: 1; }
+        .footer img { width: 18px; height: 18px; object-fit: contain; }
+        .footer span {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div style="font-weight: 700; letter-spacing: -0.5px;">Remote Control</div>
+        <img class="wordmark" src="title.png" alt="HIS SoundBoard">
+
         <div id="status" class="status disconnected">Disconnected</div>
     </div>
 
@@ -188,15 +215,19 @@
         <button class="panic-btn" onclick="sendPanic()">STOP ALL SOUNDS</button>
     </div>
 
+    <div class="footer">
+        <a href="https://hismindset.de" target="_blank" rel="noopener">
+            <img src="hismindset_white.png" alt="hismindset">
+            <span>by hismindset</span>
+        </a>
+    </div>
+
     <script>
         const NUMPAD_MAP = [7, 8, 9, 4, 5, 6, 1, 2, 3];
         let ws;
-        let state = {
-            pages: [],
-            activePageId: '',
-            sounds: [] // { pageId, slot, sound }
-        };
+        let state = { pages: [], activePageId: '', sounds: [] };
         let selectedPageId = '';
+        let soundsReceived = false;
 
         function connect() {
             updateStatus('Connecting...', 'disconnected');
@@ -204,27 +235,26 @@
 
             ws.onopen = () => {
                 updateStatus('Connected', 'connected');
-                // Request initial state on connect
-                ws.send(JSON.stringify({ type: 'request-sounds' }));
+                soundsReceived = false;
+                // Ask for the board, and keep retrying until we actually get it
+                // (the desktop app's renderer may not be ready on the first request).
+                ensureSounds(0);
             };
 
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'sounds-update') {
-                        // msg.sounds actually contains { pages, activePageId, sounds }
                         const payload = msg.sounds;
-                        
-                        if (payload.pages) {
+                        if (payload && payload.pages) {
                             state.pages = payload.pages;
                             state.activePageId = payload.activePageId;
                             state.sounds = payload.sounds || [];
-                            
-                            // If no page selected yet, or selected page was deleted, select active
+                            if (state.pages.length > 0) soundsReceived = true;
+
                             if (!selectedPageId || !state.pages.find(p => p.id === selectedPageId)) {
                                 selectedPageId = state.activePageId || (state.pages[0] ? state.pages[0].id : '');
                             }
-                            
                             renderTabs();
                             renderGrid();
                         }
@@ -240,6 +270,19 @@
             };
         }
 
+        function requestSounds() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'request-sounds' }));
+            }
+        }
+
+        // Retry the initial request a few times until the board arrives.
+        function ensureSounds(attempt) {
+            if (soundsReceived || !ws || ws.readyState !== WebSocket.OPEN) return;
+            requestSounds();
+            if (attempt < 8) setTimeout(() => ensureSounds(attempt + 1), 1200);
+        }
+
         function updateStatus(text, cls) {
             const el = document.getElementById('status');
             el.textContent = text;
@@ -249,7 +292,6 @@
         function renderTabs() {
             const container = document.getElementById('pageTabs');
             container.innerHTML = '';
-            
             state.pages.forEach(page => {
                 const btn = document.createElement('div');
                 btn.className = `tab ${page.id === selectedPageId ? 'active' : ''}`;
@@ -261,25 +303,23 @@
                 };
                 container.appendChild(btn);
             });
-
             if (state.pages.length === 0) {
-                container.innerHTML = '<div class="tab">No Pages</div>';
+                container.innerHTML = '<div class="tab">Waiting for soundboard…</div>';
             }
         }
 
         function renderGrid() {
             const container = document.getElementById('grid');
             container.innerHTML = '';
-
             const pageSounds = state.sounds.filter(s => s.pageId === selectedPageId);
 
             for (let i = 0; i < 9; i++) {
                 const slotIndex = i;
                 const soundEntry = pageSounds.find(s => s.slot === slotIndex);
-                
+
                 const cell = document.createElement('div');
                 cell.className = `cell ${soundEntry ? 'has-sound' : ''}`;
-                
+
                 const numHint = document.createElement('div');
                 numHint.className = 'numpad-hint';
                 numHint.textContent = NUMPAD_MAP[i];
@@ -293,37 +333,25 @@
 
                     cell.onclick = () => {
                         triggerSound(slotIndex);
-                        // Feedback
                         cell.style.borderColor = 'var(--accent-color)';
                         setTimeout(() => cell.style.borderColor = '', 200);
                     };
                 }
-
                 container.appendChild(cell);
             }
         }
 
         function triggerSound(slot) {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            ws.send(JSON.stringify({
-                type: 'play-sound',
-                pageId: selectedPageId,
-                slot: slot
-            }));
+            ws.send(JSON.stringify({ type: 'play-sound', pageId: selectedPageId, slot: slot }));
         }
 
         function sendPanic() {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            ws.send(JSON.stringify({
-                type: 'play-sound',
-                pageId: '__PANIC__',
-                slot: -1
-            }));
+            ws.send(JSON.stringify({ type: 'play-sound', pageId: '__PANIC__', slot: -1 }));
         }
 
-        // Init
         connect();
-
     </script>
 </body>
 </html>

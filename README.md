@@ -120,14 +120,17 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 4.  **Note:** You will *not* hear yourself (to prevent feedback), but others in the voice chat will hear you + the soundboard sounds.
 
 ## 📱 Remote Control
-1. Open **Settings** in the desktop app.
-2. Scan the **QR Code** or enter the IP address on your phone's browser.
-3. You can now tap sounds and switch pages from your mobile device!
+1. Make sure your phone/tablet is on the **same network** as the PC.
+2. Open **Settings** in the desktop app.
+3. Scan the **QR code** or type the shown address (e.g. `http://192.168.x.x:8080`) into your phone's browser.
+4. Tap sounds, switch pages, or hit **Stop All** — straight from your phone. The remote updates live as you edit the board.
 
 ## ⌨️ Shortcuts
-- **Click**: Play Sound
-- **Right-Click**: Edit Sound / Assign Key
-- **Stop All**: Stop all currently playing sounds.
+- **Click**: Play sound
+- **Right-click**: Edit sound (context menu)
+- **Middle-click**: Remove sound from slot
+- **Escape**: Stop all sounds (panic)
+- Assign per-page trigger keys via the key icon on each page in the sidebar.
 
 ## 🛠️ Development
 
