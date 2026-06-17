@@ -4,6 +4,11 @@ directories:
   output: release
   buildResources: resources
 
+# No native module needs recompiling: uiohook-napi ships ABI-stable N-API
+# prebuilds. Skipping the rebuild avoids @electron/rebuild's node-abi lag on new
+# Electron releases (e.g. Electron 42) and keeps cross-platform builds working.
+npmRebuild: false
+
 files:
   - dist/**/*
   - resources/**/*
