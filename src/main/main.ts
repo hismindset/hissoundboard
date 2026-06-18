@@ -381,10 +381,14 @@ const setupGlobalHooks = () => {
     }
 
     if (useFallback) {
-        console.log('[Main] Using Wayland/Fallback shortcuts');
-        setTimeout(() => {
-            mainWindow?.webContents.send('wayland-warning');
-        }, 2000);
+        console.log('[Main] Using fallback (Electron globalShortcut) shortcuts');
+        // The "Wayland detected" notice is only relevant on actual Wayland — not when
+        // uiohook merely failed to start on macOS/Windows (e.g. missing permissions).
+        if (isWayland) {
+            setTimeout(() => {
+                mainWindow?.webContents.send('wayland-warning');
+            }, 2000);
+        }
         registerFallbackShortcuts();
     }
 };
