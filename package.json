@@ -1,9 +1,10 @@
 {
     "name": "hissoundboard",
-    "productName": "HIS SoundBoard",
+    "productName": "HISSOUNDBOARD",
     "version": "1.0.0",
     "description": "A modern, dark-themed soundboard application with dual audio output, global shortcuts, and remote control.",
-    "author": "Florian Göhring",
+    "author": "Florian Göhring (HISMINDSET)",
+    "license": "MIT",
     "main": "dist/main/main.js",
     "scripts": {
         "start": "npm run build && electron .",

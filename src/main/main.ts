@@ -13,21 +13,27 @@ import { LinuxAudioManager } from './LinuxAudioManager';
 
 const linuxAudio = new LinuxAudioManager();
 
-console.log('[Main] Starting HIS SoundBoard...');
+console.log('[Main] Starting HISSOUNDBOARD...');
 
-// One-time migration: the app was renamed OpenSoundBoard -> HIS SoundBoard, which
-// changes Electron's userData directory. Copy the old data (pages/sounds/localStorage)
-// into the new location once so users don't lose their board after the rebrand.
+// One-time migration: the app was renamed (OpenSoundBoard -> "HIS SoundBoard" ->
+// HISSOUNDBOARD); each rename changes Electron's userData directory. Copy the most
+// recent previous profile into the new one so users keep their board after a rename.
 const migrateLegacyUserData = () => {
     try {
         const newDir = app.getPath('userData');
-        const legacyDir = path.join(app.getPath('appData'), 'OpenSoundBoard');
-        if (legacyDir === newDir) return;
-        if (!fs.existsSync(legacyDir)) return;
-        // Only migrate if the new profile hasn't been initialised yet.
+        // New profile already initialised -> nothing to migrate.
         if (fs.existsSync(path.join(newDir, 'Local Storage'))) return;
-        fs.cpSync(legacyDir, newDir, { recursive: true, force: false, errorOnExist: false });
-        console.log('[Main] Migrated user data from legacy OpenSoundBoard profile.');
+        const appData = app.getPath('appData');
+        const legacyNames = ['HIS SoundBoard', 'OpenSoundBoard']; // most recent first
+        for (const name of legacyNames) {
+            const legacyDir = path.join(appData, name);
+            if (legacyDir === newDir) continue;
+            if (fs.existsSync(path.join(legacyDir, 'Local Storage'))) {
+                fs.cpSync(legacyDir, newDir, { recursive: true, force: false, errorOnExist: false });
+                console.log(`[Main] Migrated user data from legacy "${name}" profile.`);
+                return;
+            }
+        }
     } catch (err) {
         console.error('[Main] userData migration failed:', err);
     }

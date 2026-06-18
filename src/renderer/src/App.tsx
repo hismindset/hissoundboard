@@ -193,7 +193,7 @@ const App: React.FC = () => {
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
             >
                 <div className="flex items-center gap-2 pl-16">
-                    <img src={wordmark} alt="HIS SoundBoard" className="h-6 w-auto object-contain" />
+                    <img src={wordmark} alt="HISSOUNDBOARD" className="h-6 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                     <button

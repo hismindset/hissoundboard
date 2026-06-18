@@ -1,4 +1,4 @@
-# HIS SoundBoard
+# HISSOUNDBOARD
 
 A modern, open-source soundboard application built with Electron, React, and TypeScript. Designed for gamers, streamers, and podcasters, it features dual audio output (monitor + voice chat), global hotkeys, dynamic pages, and a mobile remote control.
 
@@ -78,7 +78,7 @@ Decisions still to make:
 ## 🚀 Installation & Setup
 
 ### 1. Prerequisites (Virtual Audio)
-To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Audio Device**. HIS SoundBoard acts as a source, playing audio into this "virtual microphone".
+To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Audio Device**. HISSOUNDBOARD acts as a source, playing audio into this "virtual microphone".
 
 | OS | Recommended Software | Link |
 | :--- | :--- | :--- |
@@ -87,27 +87,27 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 | **Linux** | PulseAudio Null Sink | *Built-in (App provides auto-setup)* |
 
 **After installing:**
-1. Open **HIS SoundBoard Settings** (or use the Setup Wizard).
+1. Open **HISSOUNDBOARD Settings** (or use the Setup Wizard).
 2. Set **Output Device** to *CABLE Input* (Windows) or *BlackHole* (macOS).
 3. In your Voice Chat App (e.g., Discord), set **Input Device** to *CABLE Output* or *BlackHole*.
 
 ### 2. Install the App
 
 #### Windows
-- **Installer:** Download `HIS SoundBoard-Setup.exe` and run it.
-- **Portable:** Download the `.zip`, extract, and run `HIS SoundBoard.exe`.
+- **Installer:** Download `HISSOUNDBOARD-Setup.exe` and run it.
+- **Portable:** Download the `.zip`, extract, and run `HISSOUNDBOARD.exe`.
 
 #### macOS
-- **Installer:** Download the `.dmg`, open it, and drag `HIS SoundBoard` to Applications.
+- **Installer:** Download the `.dmg`, open it, and drag `HISSOUNDBOARD` to Applications.
 - **Portable:** Download the `.zip`, extract, and run.
 
 > **Note:** Since this app is not signed with an Apple Developer ID, you may need to run this command if it says "App is damaged":
 > ```bash
-> xattr -cr "/Applications/HIS SoundBoard.app"
+> xattr -cr "/Applications/HISSOUNDBOARD.app"
 > ```
 
 #### Linux
-- **Debian/Ubuntu:** Download `.deb` and run `sudo dpkg -i HIS SoundBoard*.deb`.
+- **Debian/Ubuntu:** Download `.deb` and run `sudo dpkg -i HISSOUNDBOARD*.deb`.
 - **Fedora/RHEL:** Download `.rpm` and install.
 - **AppImage:** Download `.AppImage`, make it executable (`chmod +x`), and run.
 
@@ -131,6 +131,24 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 - **Middle-click**: Remove sound from slot
 - **Escape**: Stop all sounds (panic)
 - Assign per-page trigger keys via the key icon on each page in the sidebar.
+
+## 🔒 Privacy & Network
+
+- **No telemetry.** HISSOUNDBOARD does not collect or send any usage data.
+- **Local web server.** For the phone/tablet remote, the app runs a small HTTP +
+  WebSocket server on **port `8080`**, bound to your local network only. It is
+  used solely to serve the remote page and relay button presses — nothing leaves
+  your LAN. Your OS/firewall may ask to allow incoming connections; that is
+  expected (decline it if you don't use the remote). The QR code is generated
+  **locally** (no third-party service).
+- **Your sounds stay local.** Audio files live in your app data folder (or a
+  custom directory you choose) and are never uploaded.
+
+## 📄 License
+
+Released under the **MIT License** — see [LICENSE](LICENSE).
+Bundled open-source components and their licenses are listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## 🛠️ Development
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { useSoundboardStore } from '../lib/store';
 import { AudioSetupWizard } from './AudioSetupWizard';
 import { WaylandShortcuts } from './WaylandShortcuts';
@@ -63,14 +64,18 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         window.api.getPlatform?.().then((p) => setPlatform(p)).catch(() => { });
     }, []);
 
-    // Generate QR code
+    // Generate QR code locally (no third-party service → privacy + offline)
     useEffect(() => {
         window.api.getLocalIp().then(({ ip, port }) => {
             const url = `http://${ip}:${port}`;
             setServerUrl(url);
-            setQrCodeUrl(
-                `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}&bgcolor=121712&color=5cae6b`
-            );
+            QRCode.toDataURL(url, {
+                width: 160,
+                margin: 1,
+                color: { dark: '#5cae6b', light: '#121712' },
+            })
+                .then(setQrCodeUrl)
+                .catch((err) => console.error('QR generation failed:', err));
         });
     }, []);
 
@@ -205,7 +210,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             </p>
                             <p className="text-[11px] text-surface-300 leading-relaxed">
                                 Your default microphone is mixed into the virtual device automatically.
-                                In your voice chat, select <b>“HISSoundBoard_Mic”</b> as the input
+                                In your voice chat, select <b>“HISSOUNDBOARD_Mic”</b> as the input
                                 microphone — your voice and the sounds come through together, even when
                                 no sound is playing.
                             </p>
