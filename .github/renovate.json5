@@ -15,7 +15,7 @@
   "osvVulnerabilityAlerts": true,
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 5am on the first monday of the month"]
+    "schedule": ["* 0-3 1 * *"]
   },
   "packageRules": [
     {
