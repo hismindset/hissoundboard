@@ -97,6 +97,8 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                 volume: 1.0,
                 trimStart: 0,
                 trimEnd: 0,
+                fadeIn: 0,
+                fadeOut: 0,
                 playbackMode: 'one-shot',
                 createdAt: Date.now(),
             };

@@ -55,6 +55,10 @@ protocol.registerSchemesAsPrivileged([
             standard: true,
             secure: true,
             supportFetchAPI: true,
+            // Required so the renderer (origin file://) may fetch() this scheme
+            // cross-origin. Without it Chromium blocks the request outright and
+            // WaveSurfer can't read the audio to draw the waveform / preview.
+            corsEnabled: true,
             stream: true,
             bypassCSP: true,
         },
@@ -402,12 +406,24 @@ const setupGlobalHooks = () => {
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
 
 const setupIpcHandlers = () => {
-    protocol.handle('sound', (request) => {
+    protocol.handle('sound', async (request) => {
         const reqUrl = new URL(request.url);
         const filePath = decodeURIComponent(reqUrl.pathname.replace(/^\/+/, ''));
         const fullPath = path.join(getSoundsDir(), filePath);
         const fileUrl = `file://${fullPath}`;
-        return net.fetch(fileUrl);
+        const response = await net.fetch(fileUrl);
+        // Chromium (Electron 35+) enforces CORS on fetch() to custom schemes.
+        // The renderer page origin differs from the `sound://` scheme, so without
+        // an explicit ACAO header WaveSurfer's fetch() fails with "Failed to fetch"
+        // (waveform + preview break). Media-element playback is unaffected, which is
+        // why only the editor regressed. Re-emit the response with CORS allowed.
+        const headers = new Headers(response.headers);
+        headers.set('Access-Control-Allow-Origin', '*');
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+        });
     });
 
     ipcMain.handle(

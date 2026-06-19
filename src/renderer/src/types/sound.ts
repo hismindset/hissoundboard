@@ -15,6 +15,10 @@ export interface Sound {
     trimStart: number;
     /** Non-destructive trim end in seconds (0 = end of file) */
     trimEnd: number;
+    /** Fade-in duration in seconds (0 = hard start). Optional for back-compat. */
+    fadeIn?: number;
+    /** Fade-out duration in seconds (0 = hard end). Optional for back-compat. */
+    fadeOut?: number;
     /** Playback mode */
     playbackMode: PlaybackMode;
     /** ISO timestamp */

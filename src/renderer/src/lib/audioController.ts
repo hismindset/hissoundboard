@@ -8,6 +8,11 @@ import type { AudioSettings } from './store';
 class AudioController {
     private activeSounds: Map<string, HTMLAudioElement[]> = new Map();
     private trimHandlers: Map<HTMLAudioElement, () => void> = new Map();
+    // Fade envelope: per-element 0..1 gain factor + the timer driving it.
+    private elementFade: WeakMap<HTMLAudioElement, number> = new WeakMap();
+    private fadeIntervals: Map<HTMLAudioElement, ReturnType<typeof setInterval>> = new Map();
+    // Which master bus an element belongs to (true = monitor, false = output).
+    private elementIsMonitor: WeakMap<HTMLAudioElement, boolean> = new WeakMap();
 
     // Microphone Passthrough State
     private audioContext: AudioContext;
@@ -327,6 +332,11 @@ class AudioController {
             this.setupTrimHandler(outputAudio, sound);
         }
 
+        if ((sound.fadeIn || 0) > 0 || (sound.fadeOut || 0) > 0) {
+            this.setupFadeHandler(monitorAudio, sound, true);
+            this.setupFadeHandler(outputAudio, sound, false);
+        }
+
         // Active tracking
         if (sound.playbackMode === 'loop') {
             this.activeSounds.set(sound.id, elements);
@@ -344,6 +354,8 @@ class AudioController {
                     this.removeActiveElement(sound.id, monitorAudio, outputAudio);
                     this.cleanupTrimHandler(monitorAudio);
                     this.cleanupTrimHandler(outputAudio);
+                    this.cleanupFadeHandler(monitorAudio);
+                    this.cleanupFadeHandler(outputAudio);
                     callbacks.onEnd?.();
                 }
             };
@@ -364,10 +376,21 @@ class AudioController {
         return true;
     }
 
+    /** Final element volume = base × master × fade, muted-aware and clamped to 1. */
+    private volumeFor(el: HTMLAudioElement, isMonitor: boolean): number {
+        const base = this.elementBaseVolume.get(el) ?? 1.0;
+        const fade = this.elementFade.get(el) ?? 1.0;
+        const muted = isMonitor ? this.settings.monitorMuted : this.settings.outputMuted;
+        const master = isMonitor ? this.settings.monitorVolume : this.settings.outputVolume;
+        return muted ? 0 : Math.min(1, base * master * fade);
+    }
+
     private async applySettingsToElements(monitor: HTMLAudioElement, output: HTMLAudioElement, baseVol: number) {
         // Apply Volume
-        monitor.volume = this.settings.monitorMuted ? 0 : Math.min(1, baseVol * this.settings.monitorVolume);
-        output.volume = this.settings.outputMuted ? 0 : Math.min(1, baseVol * this.settings.outputVolume);
+        this.elementIsMonitor.set(monitor, true);
+        this.elementIsMonitor.set(output, false);
+        monitor.volume = this.volumeFor(monitor, true);
+        output.volume = this.volumeFor(output, false);
 
         // Apply Device
         try {
@@ -385,11 +408,11 @@ class AudioController {
     // Public method to force update active sounds (e.g. when slider moves)
     public updateAllActiveVolumes() {
         this.activeSounds.forEach((elements) => {
-            const [monitor, output] = elements;
-            const base = this.elementBaseVolume.get(monitor) || 1.0;
-
-            monitor.volume = this.settings.monitorMuted ? 0 : Math.min(1, base * this.settings.monitorVolume);
-            output.volume = this.settings.outputMuted ? 0 : Math.min(1, base * this.settings.outputVolume);
+            elements.forEach((el) => {
+                // Default to monitor for the rare untracked element; pairs are
+                // tagged in applySettingsToElements.
+                el.volume = this.volumeFor(el, this.elementIsMonitor.get(el) ?? true);
+            });
         });
     }
 
@@ -398,6 +421,7 @@ class AudioController {
         if (elements) {
             elements.forEach((el) => {
                 this.cleanupTrimHandler(el);
+                this.cleanupFadeHandler(el);
                 el.pause();
                 el.currentTime = 0;
                 el.src = '';
@@ -410,6 +434,7 @@ class AudioController {
         this.activeSounds.forEach((elements) => {
             elements.forEach((el) => {
                 this.cleanupTrimHandler(el);
+                this.cleanupFadeHandler(el);
                 el.pause();
                 el.currentTime = 0;
                 el.src = '';
@@ -420,6 +445,43 @@ class AudioController {
 
     isPlaying(soundId: string): boolean {
         return this.activeSounds.has(soundId);
+    }
+
+    /** Compute the fade envelope (0..1) for an element at its current position. */
+    private computeFadeFactor(el: HTMLAudioElement, sound: Sound): number {
+        const fadeIn = sound.fadeIn || 0;
+        const fadeOut = sound.fadeOut || 0;
+        if (fadeIn <= 0 && fadeOut <= 0) return 1;
+        const start = sound.trimStart || 0;
+        const end = sound.trimEnd > 0 ? sound.trimEnd : (el.duration || 0);
+        const t = el.currentTime;
+        let f = 1;
+        if (fadeIn > 0 && t < start + fadeIn) f = Math.min(f, (t - start) / fadeIn);
+        if (fadeOut > 0 && end > 0 && t > end - fadeOut) f = Math.min(f, (end - t) / fadeOut);
+        return Math.max(0, Math.min(1, f));
+    }
+
+    /** Drive a smooth volume envelope for a sound that has fade in/out set. */
+    private setupFadeHandler(el: HTMLAudioElement, sound: Sound, isMonitor: boolean) {
+        this.elementIsMonitor.set(el, isMonitor);
+        // Seed the starting gain so a fade-in begins silent rather than popping.
+        this.elementFade.set(el, this.computeFadeFactor(el, sound));
+        el.volume = this.volumeFor(el, isMonitor);
+        const id = setInterval(() => {
+            if (el.paused || el.ended) return;
+            this.elementFade.set(el, this.computeFadeFactor(el, sound));
+            el.volume = this.volumeFor(el, isMonitor);
+        }, 25);
+        this.fadeIntervals.set(el, id);
+    }
+
+    private cleanupFadeHandler(el: HTMLAudioElement): void {
+        const id = this.fadeIntervals.get(el);
+        if (id !== undefined) {
+            clearInterval(id);
+            this.fadeIntervals.delete(el);
+        }
+        this.elementFade.delete(el);
     }
 
     private setupTrimHandler(el: HTMLAudioElement, sound: Sound) {

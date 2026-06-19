@@ -10,7 +10,7 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 ### 🎛️ Soundboard & Pages
 - **Numpad-style 3×3 grid**: "Just drag in and go" layout designed for muscle memory.
 - **Dynamic pages**: Create, rename, delete, and organize sounds across unlimited pages.
-- **Per-sound editing**: Adjust per-sound volume (up to 200%), trim start/end, and choose a playback mode (one-shot or loop).
+- **Per-sound editing**: Adjust per-sound volume (up to 200%), trim start/end, set optional fade-in/-out (DaVinci-style corner handles on the waveform), and choose a playback mode (one-shot or loop).
 - **Stop All / Panic**: Instantly stop every playing sound (button or `Escape`).
 
 ### 🔊 Audio
@@ -56,13 +56,11 @@ Not yet implemented — ideas under consideration:
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
 - **Auto-updater**: Check for new releases and update in place (via `electron-updater`). Note: works for Windows (NSIS) and Linux (AppImage); macOS auto-update requires a signed/notarized build.
-- **Optional fade in/out**: Smooth fade-in on start and fade-out on stop/end, configurable per sound.
 
 ## 📋 TODO
 
 Concrete tasks (committed, not just ideas):
 
-- **App icon**: design a dedicated *variation* of the hismindset logo for the app/installer icon (dock, taskbar, .icns/.ico/.png) — concept not yet defined.
 - **Automated dependency updates**: Set up Renovate (or Dependabot) for regular, low-noise updates.
 - **Straighten out release & deployment**: Reliable, repeatable release flow including versioning (e.g. tag → CI builds → GitHub Release).
 
