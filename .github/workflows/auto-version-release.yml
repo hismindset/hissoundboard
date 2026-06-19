@@ -1,0 +1,193 @@
+name: Auto Version and Release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+      - closed
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump to release from main
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      draft:
+        description: Create the GitHub Release as a draft
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-release-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate-release-choice:
+    name: Validate release choice
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check release labels
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const author = process.env.PR_AUTHOR || "";
+          const labels = JSON.parse(process.env.LABELS_JSON || "[]");
+          const isRenovate = author === "renovate[bot]" || labels.includes("dependencies");
+          const releaseLabels = labels.filter((label) => /^release:(patch|minor|major)$/.test(label));
+
+          if (isRenovate) {
+            console.log("Renovate/dependency PR detected. It will release as patch after merge.");
+            process.exit(0);
+          }
+
+          if (releaseLabels.length !== 1) {
+            console.error("Add exactly one release label before merge: release:patch, release:minor, or release:major.");
+            process.exit(1);
+          }
+
+          console.log(`Release choice: ${releaseLabels[0]}`);
+          NODE
+
+  prepare-release:
+    name: Prepare version and tag
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      draft: ${{ steps.bump.outputs.draft }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Determine version bump
+        id: bump
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BUMP: ${{ inputs.bump || '' }}
+          INPUT_DRAFT: ${{ inputs.draft || false }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
+          LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("fs");
+
+          const eventName = process.env.EVENT_NAME;
+          const inputBump = process.env.INPUT_BUMP;
+          const inputDraft = process.env.INPUT_DRAFT || "false";
+          const author = process.env.PR_AUTHOR || "";
+          const labels = JSON.parse(process.env.LABELS_JSON || "[]");
+
+          let bump;
+          if (eventName === "workflow_dispatch") {
+            bump = inputBump;
+          } else {
+            const isRenovate = author === "renovate[bot]" || labels.includes("dependencies");
+            const releaseLabels = labels.filter((label) => /^release:(patch|minor|major)$/.test(label));
+
+            if (isRenovate) {
+              bump = "patch";
+            } else if (releaseLabels.length === 1) {
+              bump = releaseLabels[0].replace("release:", "");
+            } else {
+              console.error("Cannot release: non-Renovate PRs need exactly one release label: release:patch, release:minor, or release:major.");
+              process.exit(1);
+            }
+          }
+
+          if (!["patch", "minor", "major"].includes(bump)) {
+            console.error(`Invalid bump: ${bump}`);
+            process.exit(1);
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `bump=${bump}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `draft=${inputDraft}\n`);
+          console.log(`Version bump: ${bump}`);
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure Git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump package version and create tag
+        id: version
+        env:
+          BUMP: ${{ steps.bump.outputs.bump }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Working tree is not clean before version bump."
+            git status --short
+            exit 1
+          fi
+
+          tag="$(npm version "$BUMP" --message "chore(release): %s [skip ci]")"
+          version="${tag#v}"
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Created $tag"
+
+      - name: Push release commit and tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+          git push origin "$TAG"
+
+  release:
+    name: Build and publish release
+    needs: prepare-release
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      tag: ${{ needs.prepare-release.outputs.tag }}
+      draft: ${{ needs.prepare-release.outputs.draft == 'true' }}
+      prerelease: false

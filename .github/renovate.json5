@@ -1,0 +1,48 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 5am on monday"],
+  "labels": ["dependencies", "release:patch"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "bump",
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on the first monday of the month"]
+  },
+  "packageRules": [
+    {
+      "description": "Keep normal npm maintenance reviewable without a PR storm.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm minor and patch dependencies"
+    },
+    {
+      "description": "Require an explicit dashboard click before major dependency jumps.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "addLabels": ["major-update"]
+    },
+    {
+      "description": "Electron packaging and native input hooks can break runtime behavior, so keep them separate.",
+      "matchPackageNames": ["electron", "electron-builder", "uiohook-napi"],
+      "groupName": "electron runtime and packaging",
+      "addLabels": ["electron", "needs-manual-test"],
+      "prPriority": 10
+    },
+    {
+      "description": "Group GitHub Actions updates separately from app dependencies.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "addLabels": ["ci"]
+    }
+  ]
+}
