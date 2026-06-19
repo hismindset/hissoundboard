@@ -142,7 +142,7 @@ jobs:
           NODE
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Configure Git author
         run: |
