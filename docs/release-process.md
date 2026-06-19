@@ -48,7 +48,7 @@ If you need a release without a PR, open GitHub Actions, choose `Auto Version an
 - Keep the repository public if zero Actions cost is important. Standard GitHub-hosted runners are free for public repositories. Private repositories use the account/org quota and can generate billable usage after the included allowance.
 - Do not switch these workflows to larger runners. Larger runners are billed even when normal hosted runners would be free.
 - Keep artifact retention short. The release workflow keeps intermediate Actions artifacts for only 3 days; the durable deliverables live on the GitHub Release.
-- CI installs with `npm ci --ignore-scripts` because the project intentionally sets `npmRebuild: false` for `electron-builder`. Running the `postinstall` hook on Ubuntu would try to compile `uiohook-napi` against missing X11 development headers instead of using the packaged prebuilds.
+- CI installs with `npm ci --ignore-scripts --loglevel=error` because the project intentionally sets `npmRebuild: false` for `electron-builder`. Running the `postinstall` hook on Ubuntu would try to compile `uiohook-napi` against missing X11 development headers instead of using the packaged prebuilds. The reduced log level also keeps known `electron-builder` transitive deprecation warnings out of release logs until upstream replaces those packages.
 
 ## Dependency update policy
 
