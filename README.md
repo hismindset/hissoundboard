@@ -56,19 +56,6 @@ Not yet implemented — ideas under consideration:
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
 - **Auto-updater**: Check for new releases and update in place (via `electron-updater`). Note: works for Windows (NSIS) and Linux (AppImage); macOS auto-update requires a signed/notarized build.
-
-## 📋 TODO
-
-Concrete tasks (committed, not just ideas):
-
-- **Automated dependency updates**: Set up Renovate (or Dependabot) for regular, low-noise updates.
-- **Straighten out release & deployment**: Reliable, repeatable release flow including versioning (e.g. tag → CI builds → GitHub Release).
-
-## ❓ Open Questions
-
-Decisions still to make:
-
-- **Tests** — worthwhile? If yes, which kind and scope? (See README maintainer notes / discuss.)
 - **Localization** — add German (i18n), or keep the UI English-only for wider open-source reach?
 
 ---
