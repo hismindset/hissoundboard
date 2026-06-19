@@ -158,3 +158,8 @@ npm start
 npm run build
 ```
 Build artifacts will be in the `dist` folder.
+
+### Release
+
+Release and dependency-update automation is documented in
+[docs/release-process.md](docs/release-process.md).

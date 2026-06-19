@@ -1,0 +1,203 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing release tag to publish, for example v1.0.1
+        required: true
+        type: string
+      draft:
+        description: Create the GitHub Release as a draft
+        required: true
+        type: boolean
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: true
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, for example v1.0.1
+        required: true
+        type: string
+      draft:
+        description: Create the GitHub Release as a draft
+        required: true
+        default: false
+        type: boolean
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      draft: ${{ steps.release.outputs.draft }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag || '' }}
+          INPUT_DRAFT: ${{ inputs.draft || false }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease || false }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
+            tag="$INPUT_TAG"
+            draft="$INPUT_DRAFT"
+            prerelease="$INPUT_PRERELEASE"
+          else
+            tag="$REF_NAME"
+            draft="false"
+            prerelease="false"
+          fi
+
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release tags must look like v1.2.3 or v1.2.3-beta.1."
+            exit 1
+          fi
+
+          version="${tag#v}"
+          if [[ "$version" == *-* && "$EVENT_NAME" != "workflow_dispatch" ]]; then
+            prerelease="true"
+          fi
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "draft=$draft"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Check package version matches tag
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+
+          if [[ "$package_version" != "$RELEASE_VERSION" ]]; then
+            echo "::error::package.json version $package_version does not match release tag v$RELEASE_VERSION."
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            artifact-name: windows-installer
+            artifact-path: |
+              release/*.exe
+              release/*.exe.blockmap
+              release/latest*.yml
+          - name: Linux
+            os: ubuntu-latest
+            artifact-name: linux-appimage
+            artifact-path: |
+              release/*.AppImage
+              release/*.AppImage.zsync
+              release/latest*.yml
+          - name: macOS
+            os: macos-latest
+            artifact-name: macos-dmg
+            artifact-path: |
+              release/*.dmg
+              release/*.dmg.blockmap
+              release/latest*.yml
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Setup Python for native modules
+        if: runner.os == 'macOS'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist -- --publish never
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - validate
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: HISSOUNDBOARD ${{ needs.validate.outputs.version }}
+          files: release-assets/*
+          generate_release_notes: true
+          draft: ${{ needs.validate.outputs.draft }}
+          prerelease: ${{ needs.validate.outputs.prerelease }}
