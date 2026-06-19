@@ -37,6 +37,10 @@ interface SoundboardState {
     // ── Shortcut Config ──────────────────────────────────────────────────
     shortcutMode: ShortcutMode;
 
+    // ── Remote Control ───────────────────────────────────────────────────
+    /** Optional PIN required to control the phone/tablet remote ('' = disabled). */
+    remotePin: string;
+
     // ── Library Drawer ───────────────────────────────────────────────────
     libraryOpen: boolean;
 
@@ -76,6 +80,7 @@ interface SoundboardState {
 
     // Shortcuts
     setShortcutMode: (mode: ShortcutMode) => void;
+    setRemotePin: (pin: string) => void;
 
     // Library drawer
     setLibraryOpen: (open: boolean) => void;
@@ -136,6 +141,7 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             customSoundsDir: '',
             shortcutMode: 'numpad',
+            remotePin: '',
             libraryOpen: false,
             hasCompletedSetup: false,
             showWaylandWarning: false,
@@ -279,6 +285,7 @@ export const useSoundboardStore = create<SoundboardState>()(
             // ── Shortcuts ────────────────────────────────────────────────────
 
             setShortcutMode: (mode) => set({ shortcutMode: mode }),
+            setRemotePin: (pin) => set({ remotePin: pin }),
 
             // ── Library Drawer ───────────────────────────────────────────────
 

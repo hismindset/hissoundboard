@@ -38,6 +38,7 @@ interface ElectronApi {
     getSoundsDir: () => Promise<string>;
     setSoundsDir: (dir: string) => void;
     setShortcutConfig: (config: ShortcutConfig) => void;
+    setRemotePin: (pin: string) => void;
     sendSoundsForRemote: (sounds: unknown) => void;
     createVirtualSink: () => Promise<{ success: boolean; error?: string }>;
     getPlatform: () => Promise<'darwin' | 'win32' | 'linux' | string>;

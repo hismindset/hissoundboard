@@ -115,6 +115,9 @@ const api = {
         ipcRenderer.send('set-shortcut-config', config);
     },
 
+    /** Set (or clear, with '') the optional remote-control PIN */
+    setRemotePin: (pin: string) => ipcRenderer.send('set-remote-pin', pin),
+
     /** Start listening for keys to record */
     startRecordingKeys: () => ipcRenderer.send('start-recording-keys'),
 
