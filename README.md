@@ -91,23 +91,27 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 
 ### 2. Install the App
 
+> **Note:** The builds are **not code-signed**. That's expected for an
+> open-source project, but your OS may warn you on first launch (see the
+> per-platform notes below). The app contains no telemetry and bundles no
+> third-party binaries.
+
 #### Windows
-- **Installer:** Download `HISSOUNDBOARD-Setup.exe` and run it.
-- **Portable:** Download the `.zip`, extract, and run `HISSOUNDBOARD.exe`.
+- **Installer:** Download `HISSOUNDBOARD Setup <version>.exe` (NSIS) and run it.
+- On first run, Windows SmartScreen may warn about an unknown publisher →
+  **More info → Run anyway**.
 
 #### macOS
-- **Installer:** Download the `.dmg`, open it, and drag `HISSOUNDBOARD` to Applications.
-- **Portable:** Download the `.zip`, extract, and run.
-
-> **Note:** Since this app is not signed with an Apple Developer ID, you may need to run this command if it says "App is damaged":
-> ```bash
-> xattr -cr "/Applications/HISSOUNDBOARD.app"
-> ```
+- Download the `.dmg`, open it, and drag `HISSOUNDBOARD` to Applications.
+- Since the app is not signed with an Apple Developer ID, macOS may say it is
+  damaged or from an unidentified developer. Clear the quarantine flag once:
+  ```bash
+  xattr -cr "/Applications/HISSOUNDBOARD.app"
+  ```
 
 #### Linux
-- **Debian/Ubuntu:** Download `.deb` and run `sudo dpkg -i HISSOUNDBOARD*.deb`.
-- **Fedora/RHEL:** Download `.rpm` and install.
-- **AppImage:** Download `.AppImage`, make it executable (`chmod +x`), and run.
+- **AppImage:** Download the `.AppImage`, make it executable
+  (`chmod +x HISSOUNDBOARD*.AppImage`), and run it.
 
 ---
 
@@ -138,7 +142,9 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
   used solely to serve the remote page and relay button presses — nothing leaves
   your LAN. Your OS/firewall may ask to allow incoming connections; that is
   expected (decline it if you don't use the remote). The QR code is generated
-  **locally** (no third-party service).
+  **locally** (no third-party service). By default anyone on your LAN can use
+  the remote; set an optional **Remote PIN** in Settings to require a code on
+  untrusted networks.
 - **Your sounds stay local.** Audio files live in your app data folder (or a
   custom directory you choose) and are never uploaded.
 

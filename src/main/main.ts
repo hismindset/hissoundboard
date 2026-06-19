@@ -105,10 +105,6 @@ const createWindow = () => {
             preload: path.join(__dirname, '../preload/preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            // Let the "More Help" easter egg (YouTube embed) start with sound
-            // without requiring an in-renderer click — the user already clicked
-            // the menu item, which lives in the main process.
-            autoplayPolicy: 'no-user-gesture-required',
         },
     });
 
@@ -182,21 +178,53 @@ const getRemotePath = () => {
 
 appServer.use(express.static(getRemotePath()));
 
+// Optional remote PIN. '' = disabled (anyone on the LAN may control, original
+// behaviour). When set, clients must authenticate before they can list or
+// trigger sounds. Kept in sync from the renderer via the 'set-remote-pin' IPC.
+let remotePin = '';
+
+const isAuthed = (ws: WebSocket) => !remotePin || (ws as any).hsbAuthed === true;
+
 const broadcast = (data: object) => {
     const message = JSON.stringify(data);
     wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
+        // Don't leak the board to clients that haven't entered the PIN.
+        if (client.readyState === WebSocket.OPEN && isAuthed(client)) {
             client.send(message);
         }
     });
 };
 
 wss.on('connection', (ws: WebSocket) => {
-    mainWindow?.webContents.send('request-sounds-for-remote');
+    (ws as any).hsbAuthed = !remotePin;
+    if (remotePin) {
+        // Tell the remote to ask the user for the PIN.
+        ws.send(JSON.stringify({ type: 'auth-required' }));
+    } else {
+        mainWindow?.webContents.send('request-sounds-for-remote');
+    }
 
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message.toString());
+
+            if (data.type === 'auth') {
+                if (remotePin && data.pin === remotePin) {
+                    (ws as any).hsbAuthed = true;
+                    ws.send(JSON.stringify({ type: 'auth-ok' }));
+                    mainWindow?.webContents.send('request-sounds-for-remote');
+                } else {
+                    ws.send(JSON.stringify({ type: 'auth-failed' }));
+                }
+                return;
+            }
+
+            // Every other action requires auth when a PIN is configured.
+            if (!isAuthed(ws)) {
+                ws.send(JSON.stringify({ type: 'auth-required' }));
+                return;
+            }
+
             if (data.type === 'play-sound') {
                 if (data.pageId === '__PANIC__' || (data.page === -1 && data.slot === -1)) {
                     mainWindow?.webContents.send('panic-stop');
@@ -215,7 +243,17 @@ wss.on('connection', (ws: WebSocket) => {
     });
 });
 
-appServer.get('/api/sounds', (_req, res) => {
+// Guard the HTTP control endpoints with the same optional PIN. External tools
+// (Stream Deck, Wayland shortcuts) pass it as ?pin=… when one is configured.
+const httpPinOk = (req: express.Request, res: express.Response): boolean => {
+    if (!remotePin) return true;
+    if (req.query.pin === remotePin) return true;
+    res.status(401).json({ ok: false, error: 'PIN required' });
+    return false;
+};
+
+appServer.get('/api/sounds', (req, res) => {
+    if (!httpPinOk(req, res)) return;
     mainWindow?.webContents.send('request-sounds-for-remote');
     ipcMain.once('sounds-for-remote', (_event, sounds) => {
         res.json(sounds);
@@ -226,6 +264,7 @@ appServer.get('/api/sounds', (_req, res) => {
 // Lets any external tool play a sound via a simple HTTP GET, e.g. bound to a
 // KDE custom shortcut: curl "http://localhost:8080/api/trigger/<pageId>/<slot>"
 appServer.get('/api/trigger/:pageId/:slot', (req, res) => {
+    if (!httpPinOk(req, res)) return;
     const { pageId } = req.params;
     const slot = Number(req.params.slot);
     if (!pageId || Number.isNaN(slot)) {
@@ -236,7 +275,8 @@ appServer.get('/api/trigger/:pageId/:slot', (req, res) => {
     res.json({ ok: true, pageId, slot });
 });
 
-appServer.get('/api/panic', (_req, res) => {
+appServer.get('/api/panic', (req, res) => {
+    if (!httpPinOk(req, res)) return;
     mainWindow?.webContents.send('panic-stop');
     res.json({ ok: true });
 });
@@ -573,6 +613,19 @@ const setupIpcHandlers = () => {
         }
     });
 
+    ipcMain.on('set-remote-pin', (_event, pin: string) => {
+        remotePin = typeof pin === 'string' ? pin.trim() : '';
+        console.log(`[Remote] PIN ${remotePin ? 'enabled' : 'disabled'}`);
+        // Drop the auth state of connected clients so the new policy takes
+        // effect immediately (they'll be re-prompted if a PIN is now required).
+        wss.clients.forEach((client) => {
+            (client as any).hsbAuthed = !remotePin;
+            if (remotePin && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: 'auth-required' }));
+            }
+        });
+    });
+
     // Key Recording IPC
     ipcMain.on('start-recording-keys', () => {
         console.log('[Recorder] Started recording');
@@ -612,20 +665,6 @@ app.on('ready', () => {
             callback(false);
         }
     });
-
-    // The "More Help" easter egg embeds a YouTube player. Because the renderer is
-    // served from file:// (no real origin/referrer), YouTube rejects the embed
-    // with "Error 153". Give YouTube requests a valid Referer so the player loads.
-    session.defaultSession.webRequest.onBeforeSendHeaders(
-        // Only the embed *page* needs the spoofed embedder identity. Leaving the
-        // video stream hosts (googlevideo.com) untouched avoids breaking playback.
-        { urls: ['*://www.youtube.com/embed/*', '*://www.youtube-nocookie.com/embed/*'] },
-        (details, callback) => {
-            details.requestHeaders['Referer'] = 'https://hismindset.de/';
-            details.requestHeaders['Origin'] = 'https://hismindset.de';
-            callback({ requestHeaders: details.requestHeaders });
-        }
-    );
 
     ensureSoundsDir();
     setupIpcHandlers();

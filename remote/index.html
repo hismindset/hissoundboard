@@ -191,9 +191,60 @@
             text-transform: uppercase;
             letter-spacing: 0.15em;
         }
+
+        /* PIN / AUTH OVERLAY */
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            padding: 24px;
+            z-index: 100;
+        }
+        .auth-overlay.hidden { display: none; }
+        .auth-overlay h2 { font-size: 18px; font-weight: 700; }
+        .auth-overlay .sub { font-size: 13px; color: var(--text-secondary); margin-top: -10px; }
+        .auth-error { color: #f87171; font-size: 13px; min-height: 18px; text-align: center; }
+        #pinInput {
+            width: 220px;
+            text-align: center;
+            font-size: 26px;
+            letter-spacing: 10px;
+            padding: 14px;
+            border-radius: 14px;
+            background: var(--surface-color);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-primary);
+            outline: none;
+        }
+        #pinInput:focus { border-color: var(--accent-color); }
+        .auth-overlay button {
+            padding: 13px 28px;
+            border-radius: 12px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            font-weight: 700;
+            font-size: 15px;
+        }
+        .auth-overlay button:active { transform: scale(0.98); }
     </style>
 </head>
 <body>
+
+    <div id="authOverlay" class="auth-overlay hidden">
+        <img class="wordmark" src="title.png" alt="HISSOUNDBOARD" style="height: 28px;">
+        <h2>Enter PIN</h2>
+        <div class="sub">This soundboard is PIN-protected.</div>
+        <div id="authError" class="auth-error"></div>
+        <input id="pinInput" type="tel" inputmode="numeric" autocomplete="off" placeholder="••••"
+            onkeydown="if(event.key==='Enter')submitPin()">
+        <button onclick="submitPin()">Unlock</button>
+    </div>
 
     <div class="header">
         <img class="wordmark" src="title.png" alt="HISSOUNDBOARD">
@@ -228,6 +279,28 @@
         let state = { pages: [], activePageId: '', sounds: [] };
         let selectedPageId = '';
         let soundsReceived = false;
+        let triedStoredPin = false;
+
+        const PIN_KEY = 'hsb_remote_pin';
+
+        function showAuth(error) {
+            document.getElementById('authError').textContent = error || '';
+            document.getElementById('authOverlay').classList.remove('hidden');
+            const input = document.getElementById('pinInput');
+            input.value = '';
+            input.focus();
+        }
+        function hideAuth() {
+            document.getElementById('authOverlay').classList.add('hidden');
+        }
+        function submitPin() {
+            const pin = document.getElementById('pinInput').value.trim();
+            if (!pin) return;
+            localStorage.setItem(PIN_KEY, pin);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'auth', pin }));
+            }
+        }
 
         function connect() {
             updateStatus('Connecting...', 'disconnected');
@@ -236,14 +309,39 @@
             ws.onopen = () => {
                 updateStatus('Connected', 'connected');
                 soundsReceived = false;
+                triedStoredPin = false;
                 // Ask for the board, and keep retrying until we actually get it
                 // (the desktop app's renderer may not be ready on the first request).
+                // If a PIN is required, the server replies with 'auth-required'
+                // and these requests are simply ignored until we authenticate.
                 ensureSounds(0);
             };
 
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
+                    if (msg.type === 'auth-required') {
+                        // Try a previously accepted PIN once, otherwise prompt.
+                        const stored = localStorage.getItem(PIN_KEY);
+                        if (stored && !triedStoredPin) {
+                            triedStoredPin = true;
+                            ws.send(JSON.stringify({ type: 'auth', pin: stored }));
+                        } else {
+                            showAuth('');
+                        }
+                        return;
+                    }
+                    if (msg.type === 'auth-ok') {
+                        hideAuth();
+                        soundsReceived = false;
+                        ensureSounds(0);
+                        return;
+                    }
+                    if (msg.type === 'auth-failed') {
+                        localStorage.removeItem(PIN_KEY);
+                        showAuth('Wrong PIN. Try again.');
+                        return;
+                    }
                     if (msg.type === 'sounds-update') {
                         const payload = msg.sounds;
                         if (payload && payload.pages) {

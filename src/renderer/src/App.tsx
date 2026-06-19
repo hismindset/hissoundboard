@@ -125,6 +125,12 @@ const App: React.FC = () => {
         }
     }, [shortcutMode, pages]);
 
+    // Keep the remote-control PIN in sync with the local web server.
+    const remotePin = useSoundboardStore((s) => s.remotePin);
+    useEffect(() => {
+        window.api?.setRemotePin?.(remotePin || '');
+    }, [remotePin]);
+
     // Handle IPC events
     useEffect(() => {
         const cleanupWayland = window.api.onWaylandWarning?.(() => {

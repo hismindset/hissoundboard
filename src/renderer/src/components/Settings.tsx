@@ -19,6 +19,8 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
+    const remotePin = useSoundboardStore((s) => s.remotePin);
+    const setRemotePin = useSoundboardStore((s) => s.setRemotePin);
 
     const showWaylandWarning = useSoundboardStore((s) => s.showWaylandWarning);
     const setShowWaylandWarning = useSoundboardStore((s) => s.setShowWaylandWarning);
@@ -346,6 +348,27 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             {serverUrl}
                         </a>
                     </div>
+                </div>
+
+                {/* Optional PIN protection for the remote */}
+                <div className="p-4 bg-surface-800/60 rounded-xl border border-surface-600/30 space-y-2">
+                    <label className="block text-xs font-medium text-surface-200">
+                        Remote PIN <span className="text-surface-500">(optional)</span>
+                    </label>
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        value={remotePin}
+                        onChange={(e) => setRemotePin(e.target.value.replace(/\s+/g, ''))}
+                        placeholder="No PIN — anyone on your network can control"
+                        className="w-full px-3 py-2 bg-surface-900 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
+                    />
+                    <p className="text-[11px] text-surface-400 leading-relaxed">
+                        {remotePin
+                            ? 'PIN required: the remote will ask for this code before it can see or trigger sounds.'
+                            : 'Without a PIN, anyone on the same Wi-Fi/LAN can open the remote and trigger your sounds. Set a PIN on untrusted networks.'}
+                    </p>
                 </div>
 
                 {showWizard && <AudioSetupWizard onClose={() => setShowWizard(false)} />}
