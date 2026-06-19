@@ -4,6 +4,8 @@ import PageList from './components/PageList';
 import Settings from './components/Settings';
 import Library from './components/Library';
 import SoundEditor from './components/SoundEditor';
+import HelpModal from './components/HelpModal';
+import EasterEggModal from './components/EasterEggModal';
 import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
@@ -14,6 +16,8 @@ type View = 'grid' | 'settings';
 const App: React.FC = () => {
     const [view, setView] = useState<View>('grid');
     const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
+    const [showHelp, setShowHelp] = useState(false);
+    const [showEasterEgg, setShowEasterEgg] = useState(false);
 
     const clearAllActive = useSoundboardStore((s) => s.clearAllActive);
     const library = useSoundboardStore((s) => s.library);
@@ -171,11 +175,16 @@ const App: React.FC = () => {
             window.api.sendSoundsForRemote(getAllSoundsForRemote());
         });
 
+        const cleanupHelp = window.api.onShowHelp?.(() => setShowHelp(true));
+        const cleanupEasterEgg = window.api.onShowEasterEgg?.(() => setShowEasterEgg(true));
+
         return () => {
             if (cleanupWayland) cleanupWayland();
             cleanupPanic();
             cleanupTrigger();
             cleanupRemote();
+            cleanupHelp?.();
+            cleanupEasterEgg?.();
         };
     }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, getAllSoundsForRemote, setShowWaylandWarning]);
 
@@ -257,6 +266,9 @@ const App: React.FC = () => {
                     onClose={handleCloseEditor}
                 />
             )}
+
+            {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+            {showEasterEgg && <EasterEggModal onClose={() => setShowEasterEgg(false)} />}
         </div>
     );
 }

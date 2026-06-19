@@ -27,6 +27,10 @@ interface ElectronApi {
     // Warnings
     onWaylandWarning?: (callback: () => void) => () => void;
 
+    // Help menu
+    onShowHelp?: (callback: () => void) => () => void;
+    onShowEasterEgg?: (callback: () => void) => () => void;
+
     saveSoundFile: (sourcePath: string, fileName: string) => Promise<string>;
     getLocalIp: () => Promise<{ ip: string; port: number }>;
     downloadUrl: (url: string) => Promise<string>;

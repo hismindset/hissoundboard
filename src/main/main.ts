@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut, clipboard, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, net, session, globalShortcut, clipboard, shell, Menu } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
@@ -104,6 +105,10 @@ const createWindow = () => {
             preload: path.join(__dirname, '../preload/preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
+            // Let the "More Help" easter egg (YouTube embed) start with sound
+            // without requiring an in-renderer click — the user already clicked
+            // the menu item, which lives in the main process.
+            autoplayPolicy: 'no-user-gesture-required',
         },
     });
 
@@ -122,6 +127,43 @@ const createWindow = () => {
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
+};
+
+// Build the application menu. We keep the standard roles (so copy/paste,
+// dev tools, window controls keep working) and add a Help menu whose items
+// ask the renderer to open the in-app help / easter-egg popups.
+const buildAppMenu = () => {
+    const isMac = process.platform === 'darwin';
+
+    const sendToRenderer = (channel: string) => () => {
+        mainWindow?.webContents.send(channel);
+    };
+
+    const template: MenuItemConstructorOptions[] = [
+        ...(isMac
+            ? [{ role: 'appMenu' as const }]
+            : []),
+        { role: 'fileMenu' },
+        { role: 'editMenu' },
+        { role: 'viewMenu' },
+        { role: 'windowMenu' },
+        {
+            role: 'help',
+            submenu: [
+                {
+                    label: 'Show Help',
+                    accelerator: isMac ? 'Cmd+?' : 'F1',
+                    click: sendToRenderer('show-help'),
+                },
+                {
+                    label: 'More Help',
+                    click: sendToRenderer('show-easter-egg'),
+                },
+            ],
+        },
+    ];
+
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
 // ─── Remote Control Server ───────────────────────────────────────────────────
@@ -571,9 +613,24 @@ app.on('ready', () => {
         }
     });
 
+    // The "More Help" easter egg embeds a YouTube player. Because the renderer is
+    // served from file:// (no real origin/referrer), YouTube rejects the embed
+    // with "Error 153". Give YouTube requests a valid Referer so the player loads.
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+        // Only the embed *page* needs the spoofed embedder identity. Leaving the
+        // video stream hosts (googlevideo.com) untouched avoids breaking playback.
+        { urls: ['*://www.youtube.com/embed/*', '*://www.youtube-nocookie.com/embed/*'] },
+        (details, callback) => {
+            details.requestHeaders['Referer'] = 'https://hismindset.de/';
+            details.requestHeaders['Origin'] = 'https://hismindset.de';
+            callback({ requestHeaders: details.requestHeaders });
+        }
+    );
+
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
+    buildAppMenu();
     setupGlobalHooks();
 
     // Linux Specific Startup: create virtual sink + loop the mic into it (OS-level mixing)

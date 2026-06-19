@@ -56,6 +56,20 @@ const api = {
         return () => ipcRenderer.removeListener('key-recorded', handler);
     },
 
+    /** Help menu → open the in-app help popup */
+    onShowHelp: (callback: () => void) => {
+        const handler = () => callback();
+        ipcRenderer.on('show-help', handler);
+        return () => ipcRenderer.removeListener('show-help', handler);
+    },
+
+    /** Help menu → open the "More Help" easter-egg popup */
+    onShowEasterEgg: (callback: () => void) => {
+        const handler = () => callback();
+        ipcRenderer.on('show-easter-egg', handler);
+        return () => ipcRenderer.removeListener('show-easter-egg', handler);
+    },
+
     // ─── Renderer → Main Invocations ─────────────────────────────────────────
 
     /** Copy a dropped sound file to the app's sounds directory */
