@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import type { Sound } from '../types/sound';
 import { formatSoundName, generateId } from '../lib/utils';
+import { VOICE_EFFECT_PRESETS, effectSlotId } from '../lib/voiceEffects';
 import ConfirmModal from './ConfirmModal';
 
 interface LibraryProps {
@@ -17,6 +18,15 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
     const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
     const unassignSlot = useSoundboardStore((s) => s.unassignSlot);
     const getUsedSoundIds = useSoundboardStore((s) => s.getUsedSoundIds);
+    const activeVoiceEffect = useSoundboardStore((s) => s.activeVoiceEffect);
+    const toggleVoiceEffect = useSoundboardStore((s) => s.toggleVoiceEffect);
+    const micDeviceId = useSoundboardStore((s) => s.audioSettings?.micDeviceId || '');
+
+    // On Linux the mic is mixed at OS level and bypasses the in-app effect chain.
+    const [platform, setPlatform] = useState('');
+    useEffect(() => {
+        window.api?.getPlatform?.().then((p: string) => setPlatform(p)).catch(() => { });
+    }, []);
 
     const [search, setSearch] = useState('');
     const [showUnusedOnly, setShowUnusedOnly] = useState(false);
@@ -193,6 +203,50 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                         />
                         Nur unbenutzte anzeigen
                     </label>
+                </div>
+
+                {/* Voice Effects */}
+                <div className="px-3 py-2 border-b border-surface-700/30">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-surface-400 mb-1.5 flex items-center gap-1.5">
+                        🎭 Stimmeffekte
+                    </h4>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        {VOICE_EFFECT_PRESETS.map((preset) => {
+                            const isEffectActive = activeVoiceEffect === preset.id;
+                            return (
+                                <button
+                                    key={preset.id}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        e.dataTransfer.setData('application/x-soundboard-id', effectSlotId(preset.id));
+                                        e.dataTransfer.effectAllowed = 'copy';
+                                    }}
+                                    onClick={() => toggleVoiceEffect(preset.id)}
+                                    title={`${preset.description} – Klick zum ${isEffectActive ? 'Deaktivieren' : 'Aktivieren'}, oder aufs Grid ziehen`}
+                                    className={`
+                                        flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl cursor-grab active:cursor-grabbing
+                                        text-[10px] font-medium transition-all duration-150 select-none border
+                                        ${isEffectActive
+                                            ? 'bg-accent/20 border-accent/60 text-accent-light shadow-glow-purple'
+                                            : 'bg-surface-800/60 border-surface-700/40 text-surface-300 hover:border-neon-blue/40 hover:bg-surface-700/50'
+                                        }
+                                    `}
+                                >
+                                    <span className="text-base leading-none">{preset.emoji}</span>
+                                    <span className="truncate max-w-full">{preset.name}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {platform === 'linux' ? (
+                        <p className="text-[9px] text-yellow-500/70 mt-1.5 leading-snug">
+                            Auf Linux wird das Mikro auf OS-Ebene gemischt – die In-App-Effekte greifen dort nicht.
+                        </p>
+                    ) : !micDeviceId ? (
+                        <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">
+                            Effekte wirken auf das Mikrofon-Passthrough. Wähle zuerst ein Mikrofon in den Einstellungen.
+                        </p>
+                    ) : null}
                 </div>
 
                 {/* Sound List */}

@@ -9,6 +9,7 @@ import EasterEggModal from './components/EasterEggModal';
 import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
+import { isEffectSlotId, getEffectPreset } from './lib/voiceEffects';
 import wordmark from './assets/his_soundboard_logo.png';
 
 type View = 'grid' | 'settings';
@@ -41,6 +42,8 @@ const App: React.FC = () => {
 
     const setActive = useSoundboardStore((s) => s.setActive);
     const setInactive = useSoundboardStore((s) => s.setInactive);
+    const toggleVoiceEffect = useSoundboardStore((s) => s.toggleVoiceEffect);
+    const setActiveVoiceEffect = useSoundboardStore((s) => s.setActiveVoiceEffect);
     const getAllSoundsForRemote = useSoundboardStore((s) => s.getAllSoundsForRemote);
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
@@ -93,6 +96,11 @@ const App: React.FC = () => {
                     audioController.setMicDevice(s.micDeviceId);
                 }
             }
+
+            // Voice effect toggled (grid cell, library, shortcut or panic)
+            if (state.activeVoiceEffect !== prevState.activeVoiceEffect) {
+                audioController.setVoiceEffect(state.activeVoiceEffect);
+            }
         });
         return unsub;
     }, []);
@@ -140,6 +148,8 @@ const App: React.FC = () => {
         const cleanupPanic = window.api.onPanicStop(() => {
             audioController.stopAll();
             clearAllActive();
+            // Panic also drops the voice back to clean.
+            setActiveVoiceEffect(null);
         });
 
         const cleanupTrigger = window.api.onTriggerSound(async (payload) => {
@@ -162,6 +172,14 @@ const App: React.FC = () => {
 
             const key = `${targetPageId}-${payload.slot}`;
             const soundId = grid && grid[key];
+
+            // Effect slots toggle the voice changer instead of playing a sound.
+            if (soundId && isEffectSlotId(soundId)) {
+                const preset = getEffectPreset(soundId);
+                if (preset) toggleVoiceEffect(preset.id);
+                return;
+            }
+
             if (soundId) {
                 const sound = library && library[soundId];
                 if (sound) {
@@ -192,7 +210,7 @@ const App: React.FC = () => {
             cleanupHelp?.();
             cleanupEasterEgg?.();
         };
-    }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, getAllSoundsForRemote, setShowWaylandWarning]);
+    }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, toggleVoiceEffect, setActiveVoiceEffect, getAllSoundsForRemote, setShowWaylandWarning]);
 
     // Push the current board to connected remotes whenever it changes, so the
     // remote stays in sync after edits and reliably receives data after connecting.

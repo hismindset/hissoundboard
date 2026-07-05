@@ -34,6 +34,11 @@ interface SoundboardState {
     audioSettings: AudioSettings;
     customSoundsDir: string;
 
+    // ── Voice Effect ─────────────────────────────────────────────────────
+    /** Active voice-changer preset id (null = clean voice). Not persisted:
+     *  the app always starts with the unprocessed voice. */
+    activeVoiceEffect: string | null;
+
     // ── Shortcut Config ──────────────────────────────────────────────────
     shortcutMode: ShortcutMode;
 
@@ -72,6 +77,10 @@ interface SoundboardState {
     // Audio
     setAudioSettings: (settings: Partial<AudioSettings>) => void;
     setCustomSoundsDir: (dir: string) => void;
+
+    // Voice effect
+    setActiveVoiceEffect: (presetId: string | null) => void;
+    toggleVoiceEffect: (presetId: string) => void;
 
     // Active sounds
     setActive: (soundId: string) => void;
@@ -140,6 +149,7 @@ export const useSoundboardStore = create<SoundboardState>()(
             },
 
             customSoundsDir: '',
+            activeVoiceEffect: null,
             shortcutMode: 'numpad',
             remotePin: '',
             libraryOpen: false,
@@ -263,6 +273,15 @@ export const useSoundboardStore = create<SoundboardState>()(
                 })),
 
             setCustomSoundsDir: (dir) => set({ customSoundsDir: dir }),
+
+            // ── Voice Effect ─────────────────────────────────────────────────
+
+            setActiveVoiceEffect: (presetId) => set({ activeVoiceEffect: presetId }),
+
+            toggleVoiceEffect: (presetId) =>
+                set((state) => ({
+                    activeVoiceEffect: state.activeVoiceEffect === presetId ? null : presetId,
+                })),
 
             // ── Active Sounds ────────────────────────────────────────────────
 

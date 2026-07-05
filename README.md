@@ -16,6 +16,7 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 ### 🔊 Audio
 - **Dual audio output**: Play each sound to your headphones (Monitor) *and* a virtual cable (Output) at the same time, with independent volume and mute per side.
 - **Microphone injection (passthrough)**: Route your hardware mic into the Output cable so voice chat hears your voice + sounds through a single virtual microphone.
+- **Voice changer**: Six built-in mic effects — Robot, Deep, High, Cathedral (reverb), Chorus, and Megaphone. Toggle them from the Library panel or drop them onto grid slots to switch effects via global hotkeys.
 - **Audio Setup Wizard**: Cross-platform guide that detects virtual audio devices and, on Linux, can auto-create a PulseAudio null sink.
 - **48 kHz audio engine**: Fixed sample rate for consistent routing across devices.
 
@@ -107,6 +108,19 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 2.  Select your hardware microphone (e.g., Focusrite, Internal Mic).
 3.  The app will route your voice directly to the **Output Device** (Cable).
 4.  **Note:** You will *not* hear yourself (to prevent feedback), but others in the voice chat will hear you + the soundboard sounds.
+
+## 🎭 Voice Changer
+Apply fun effects to your voice on top of the mic passthrough:
+
+1. Enable **Microphone Injection** (see above) — effects are applied to the mic signal before it reaches the Output cable.
+2. Open the **Library** panel: the "Stimmeffekte" section lists all presets (**Robot, Deep, High, Cathedral, Chorus, Megaphone**). Click one to toggle it.
+3. **Hotkeys:** Drag an effect onto any grid slot — triggering that slot (click, numpad hotkey, or remote) then toggles the effect instead of playing a sound.
+4. Only **one effect is active at a time**; activating another one replaces it, activating the same one again switches back to your clean voice.
+
+Notes:
+- Effects always start **disabled** on app launch, and **Escape (panic)** also resets your voice to clean.
+- You won't hear the effect yourself (same as the mic passthrough — no feedback), but voice chat will.
+- **Linux:** the mic is mixed at the OS level (PulseAudio/PipeWire loopback) and bypasses the in-app audio graph, so voice effects are currently not audible on Linux.
 
 ## 📱 Remote Control
 1. Make sure your phone/tablet is on the **same network** as the PC.

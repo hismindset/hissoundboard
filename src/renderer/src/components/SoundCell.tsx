@@ -3,6 +3,7 @@ import type { Sound } from '../types/sound';
 import { useSoundboardStore } from '../lib/store';
 import { audioController } from '../lib/audioController';
 import { formatSoundName, generateId } from '../lib/utils';
+import { isEffectSlotId, getEffectPreset } from '../lib/voiceEffects';
 
 interface SoundCellProps {
     page: string; // UUID
@@ -17,15 +18,19 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
     // page is UUID, slot is number
     const cellKey = `${page}-${slot}`;
 
+    // Slot value: either a sound id or "effect:<presetId>" for voice effects.
     const soundId = useSoundboardStore((s) => s.grid[cellKey]) || null;
+    const effectPreset = soundId && isEffectSlotId(soundId) ? getEffectPreset(soundId) : undefined;
     const sound = useSoundboardStore((s) => {
         const id = s.grid[cellKey];
-        return id ? s.library[id] : undefined;
+        return id && !isEffectSlotId(id) ? s.library[id] : undefined;
     });
+    const activeVoiceEffect = useSoundboardStore((s) => s.activeVoiceEffect);
+    const toggleVoiceEffect = useSoundboardStore((s) => s.toggleVoiceEffect);
     const isActive = useSoundboardStore((s) => {
         const id = s.grid[cellKey];
         return id ? s.activeSounds.has(id) : false;
-    });
+    }) || (!!effectPreset && activeVoiceEffect === effectPreset.id);
 
     // Legacy volume props removed - controller handles it
 
@@ -53,19 +58,23 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
     }, [showContextMenu]);
 
     const handleClick = useCallback(async () => {
+        if (effectPreset) {
+            toggleVoiceEffect(effectPreset.id);
+            return;
+        }
         if (!sound) return;
         await audioController.playSound(sound, {
             onStart: () => setActive(sound.id),
             onEnd: () => setInactive(sound.id),
         });
-    }, [sound, setActive, setInactive]);
+    }, [sound, effectPreset, toggleVoiceEffect, setActive, setInactive]);
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
-        if (!sound) return;
+        if (!sound && !effectPreset) return;
         setContextMenuPos({ x: e.clientX, y: e.clientY });
         setShowContextMenu(true);
-    }, [sound]);
+    }, [sound, effectPreset]);
 
     // Middle-click removes the sound from this slot (prevents browser autoscroll too)
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -166,7 +175,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
     return (
         <>
             <div
-                draggable={!!sound}
+                draggable={!!sound || !!effectPreset}
                 onClick={handleClick}
                 onContextMenu={handleContextMenu}
                 onMouseDown={handleMouseDown}
@@ -182,9 +191,11 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                         ? 'bg-accent/10 border-2 border-accent/60 scale-[1.05]'
                         : isActive
                             ? 'bg-gradient-to-br from-accent/30 to-accent/20 border-2 border-accent-glow animate-pulse-glow scale-[1.02]'
-                            : sound
-                                ? 'bg-gradient-to-br from-surface-700 to-surface-800 border border-surface-600/50 hover:border-accent/50 hover:shadow-glow-purple hover:scale-[1.03]'
-                                : 'bg-surface-800/60 border-2 border-dashed border-surface-600/40 hover:border-accent/40 hover:bg-surface-700/40'
+                            : effectPreset
+                                ? 'bg-gradient-to-br from-surface-700 to-surface-800 border border-neon-blue/40 hover:border-neon-blue/70 hover:scale-[1.03]'
+                                : sound
+                                    ? 'bg-gradient-to-br from-surface-700 to-surface-800 border border-surface-600/50 hover:border-accent/50 hover:shadow-glow-purple hover:scale-[1.03]'
+                                    : 'bg-surface-800/60 border-2 border-dashed border-surface-600/40 hover:border-accent/40 hover:bg-surface-700/40'
                     }
                 `}
             >
@@ -193,7 +204,17 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                     {numpadLabel}
                 </span>
 
-                {sound ? (
+                {effectPreset ? (
+                    <>
+                        <span className="text-2xl leading-none">{effectPreset.emoji}</span>
+                        <span className="text-sm font-semibold text-white/90 text-center px-2 leading-tight max-w-full truncate">
+                            {effectPreset.name}
+                        </span>
+                        <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full ${isActive ? 'bg-accent/20 text-accent-light' : 'bg-neon-blue/15 text-neon-blue/80'}`}>
+                            {isActive ? 'Aktiv' : 'Effekt'}
+                        </span>
+                    </>
+                ) : sound ? (
                     <>
                         <span className="text-sm font-semibold text-white/90 text-center px-2 leading-tight max-w-full truncate">
                             {sound.displayName}
@@ -218,21 +239,23 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
             </div>
 
             {/* Context Menu */}
-            {showContextMenu && sound && (
+            {showContextMenu && (sound || effectPreset) && (
                 <div
                     ref={contextMenuRef}
                     className="fixed z-50 bg-surface-800 border border-surface-600/50 rounded-xl shadow-2xl py-1 min-w-[160px] animate-fade-in"
                     style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
                 >
-                    <button
-                        onClick={() => { setShowContextMenu(false); onEditSound(sound.id); }}
-                        className="w-full text-left px-3 py-2 text-xs text-surface-200 hover:bg-surface-700 hover:text-white transition-colors flex items-center gap-2"
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-                        </svg>
-                        Edit Sound
-                    </button>
+                    {sound && (
+                        <button
+                            onClick={() => { setShowContextMenu(false); onEditSound(sound.id); }}
+                            className="w-full text-left px-3 py-2 text-xs text-surface-200 hover:bg-surface-700 hover:text-white transition-colors flex items-center gap-2"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                            </svg>
+                            Edit Sound
+                        </button>
+                    )}
                     <button
                         onClick={() => { setShowContextMenu(false); unassignSlot(page, slot); }}
                         className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"

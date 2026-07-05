@@ -1,5 +1,6 @@
 import type { Sound } from '../types/sound';
 import type { AudioSettings } from './store';
+import { createVoiceEffectChain, type VoiceEffectChain } from './voiceEffects';
 
 /**
  * AudioController handles dual-output audio playback.
@@ -18,6 +19,11 @@ class AudioController {
     private audioContext: AudioContext;
     private micSource: MediaStreamAudioSourceNode | null = null;
     private micGain: GainNode;
+    // Voice effect chain sits between effectBus and micGain:
+    // micSource -> effectBus -> [effect] -> micGain -> destination
+    private effectBus: GainNode;
+    private voiceEffect: VoiceEffectChain | null = null;
+    private voiceEffectId: string | null = null;
 
     // Host platform. On Linux the OS (PulseAudio/PipeWire) mixes the mic into the
     // virtual sink, so the in-app Web Audio passthrough is disabled there.
@@ -69,6 +75,11 @@ class AudioController {
         this.micGain = this.audioContext.createGain();
         this.micGain.gain.value = 1.0;
         this.micGain.connect(this.audioContext.destination);
+
+        // Effect bus: mic connects here; with no effect it feeds micGain directly.
+        this.effectBus = this.audioContext.createGain();
+        this.effectBus.gain.value = 1.0;
+        this.effectBus.connect(this.micGain);
     }
 
     /** Tell the controller which OS it runs on (affects mic routing strategy). */
@@ -203,8 +214,8 @@ class AudioController {
             this.log(`[AudioController] Got Mic Stream: ${stream.id}`);
 
             this.micSource = this.audioContext.createMediaStreamSource(stream);
-            this.micSource.connect(this.micGain);
-            this.log('[AudioController] Mic Graph Connected: Source -> Gain -> Destination');
+            this.micSource.connect(this.effectBus);
+            this.log('[AudioController] Mic Graph Connected: Source -> EffectBus -> Gain -> Destination');
 
             // DEBUG: Check signal level
             this.debugSignalLevel();
@@ -255,6 +266,43 @@ class AudioController {
             } catch (err) {
                 this.warn('[AudioController] Failed to set AudioContext output device:', err);
             }
+        }
+    }
+
+    /**
+     * Enable/disable a voice effect on the mic passthrough.
+     * Pass null to go back to the clean (unprocessed) voice.
+     * Note: on Linux the mic is mixed at OS level and bypasses this graph,
+     * so effects have no audible result there.
+     */
+    setVoiceEffect(presetId: string | null) {
+        if (presetId === this.voiceEffectId) return;
+        this.log(`[AudioController] setVoiceEffect: ${presetId ?? 'off'}`);
+        this.voiceEffectId = presetId;
+
+        // Tear down the old chain and detach the bus from whatever it fed.
+        if (this.voiceEffect) {
+            this.voiceEffect.dispose();
+            this.voiceEffect = null;
+        }
+        try { this.effectBus.disconnect(); } catch { /* not connected */ }
+
+        const chain = presetId ? createVoiceEffectChain(this.audioContext, presetId) : null;
+        if (chain) {
+            this.effectBus.connect(chain.input);
+            chain.output.connect(this.micGain);
+            this.voiceEffect = chain;
+        } else {
+            if (presetId) this.warn(`[AudioController] Unknown voice effect preset: ${presetId}`);
+            this.effectBus.connect(this.micGain);
+        }
+
+        // Make sure the graph is actually running (e.g. effect toggled before
+        // any sound/mic activity resumed the context).
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch((err) =>
+                this.warn('[AudioController] Failed to resume AudioContext for effect:', err)
+            );
         }
     }
 
