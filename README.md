@@ -16,7 +16,7 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 ### 🔊 Audio
 - **Dual audio output**: Play each sound to your headphones (Monitor) *and* a virtual cable (Output) at the same time, with independent volume and mute per side.
 - **Microphone injection (passthrough)**: Route your hardware mic into the Output cable so voice chat hears your voice + sounds through a single virtual microphone.
-- **Voice changer**: Six built-in mic effects — Robot, Deep, High, Cathedral (reverb), Chorus, and Megaphone. Toggle them from the Library panel or drop them onto grid slots to switch effects via global hotkeys.
+- **Voice changer**: Six built-in mic effects — Robot, Deep, High, Cathedral (reverb), Chorus, and Megaphone. Toggle them from the Library panel or drop them onto grid slots to switch effects via global hotkeys. Each effect's parameters are editable in-app (live, persisted, with reset), including a self-monitor mode to hear yourself while tweaking.
 - **Audio Setup Wizard**: Cross-platform guide that detects virtual audio devices and, on Linux, can auto-create a PulseAudio null sink.
 - **48 kHz audio engine**: Fixed sample rate for consistent routing across devices.
 
@@ -116,6 +116,7 @@ Apply fun effects to your voice on top of the mic passthrough:
 2. Open the **Library** panel: the "Stimmeffekte" section lists all presets (**Robot, Deep, High, Cathedral, Chorus, Megaphone**). Click one to toggle it.
 3. **Hotkeys:** Drag an effect onto any grid slot — triggering that slot (click, numpad hotkey, or remote) then toggles the effect instead of playing a sound.
 4. Only **one effect is active at a time**; activating another one replaces it, activating the same one again switches back to your clean voice.
+5. **Customize effects:** every effect has editable parameters (e.g. pitch amount, modulation frequency, reverb length, distortion). Open the editor via the pencil icon on an effect in the Library, or right-click an effect slot on the grid → "Effekt bearbeiten". Changes apply **live** while the effect is running, are saved persistently, and can be reverted with the Reset button. The editor also offers a **self-monitor** ("Abhören") that plays your processed voice on the monitor device — use headphones to avoid feedback.
 
 Notes:
 - Effects always start **disabled** on app launch, and **Escape (panic)** also resets your voice to clean.

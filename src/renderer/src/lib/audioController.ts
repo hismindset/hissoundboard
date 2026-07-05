@@ -1,6 +1,6 @@
 import type { Sound } from '../types/sound';
 import type { AudioSettings } from './store';
-import { createVoiceEffectChain, type VoiceEffectChain } from './voiceEffects';
+import { createVoiceEffectChain, resolveEffectParams, type VoiceEffectChain } from './voiceEffects';
 
 /**
  * AudioController handles dual-output audio playback.
@@ -24,6 +24,11 @@ class AudioController {
     private effectBus: GainNode;
     private voiceEffect: VoiceEffectChain | null = null;
     private voiceEffectId: string | null = null;
+    // Resolved params of the active chain (JSON), to skip no-op rebuilds.
+    private voiceEffectParamsJson = '';
+    // Self-monitor tap (effect editor): micGain -> MediaStreamDestination -> <audio> on the monitor device.
+    private monitorTap: MediaStreamAudioDestinationNode | null = null;
+    private monitorAudio: HTMLAudioElement | null = null;
 
     // Host platform. On Linux the OS (PulseAudio/PipeWire) mixes the mic into the
     // virtual sink, so the in-app Web Audio passthrough is disabled there —
@@ -323,11 +328,17 @@ class AudioController {
      * On Linux this also switches the mic path: the OS-level loopback is
      * unloaded and the mic routed through the app graph while an effect is
      * active, and restored when the effect is turned off.
+     *
+     * `paramOverrides` are the user's edited values for the preset (partial;
+     * merged with defaults). Changing params of the active effect rebuilds
+     * the chain in place.
      */
-    setVoiceEffect(presetId: string | null) {
-        if (presetId === this.voiceEffectId) return;
+    setVoiceEffect(presetId: string | null, paramOverrides?: Record<string, number>) {
+        const paramsJson = presetId ? JSON.stringify(resolveEffectParams(presetId, paramOverrides)) : '';
+        if (presetId === this.voiceEffectId && paramsJson === this.voiceEffectParamsJson) return;
         this.log(`[AudioController] setVoiceEffect: ${presetId ?? 'off'}`);
         this.voiceEffectId = presetId;
+        this.voiceEffectParamsJson = paramsJson;
 
         // Tear down the old chain and detach the bus from whatever it fed.
         if (this.voiceEffect) {
@@ -336,7 +347,7 @@ class AudioController {
         }
         try { this.effectBus.disconnect(); } catch { /* not connected */ }
 
-        const chain = presetId ? createVoiceEffectChain(this.audioContext, presetId) : null;
+        const chain = presetId ? createVoiceEffectChain(this.audioContext, presetId, paramOverrides) : null;
         if (chain) {
             this.effectBus.connect(chain.input);
             chain.output.connect(this.micGain);
@@ -356,6 +367,47 @@ class AudioController {
 
         if (this.platform === 'linux') {
             this.queueLinuxMicPathUpdate();
+        }
+    }
+
+    /**
+     * Start self-monitoring for the effect editor: taps the processed mic
+     * signal (post effect + gain) and plays it on the MONITOR device so the
+     * user can hear their own effected voice while tweaking parameters.
+     * Headphones recommended — speakers would feed back into the mic.
+     */
+    async startVoiceMonitor(): Promise<boolean> {
+        if (this.monitorTap) return true;
+        try {
+            const dest = this.audioContext.createMediaStreamDestination();
+            this.micGain.connect(dest);
+            const el = new Audio();
+            el.srcObject = dest.stream;
+            if (this.settings.monitorDeviceId && typeof (el as any).setSinkId === 'function') {
+                await (el as any).setSinkId(this.settings.monitorDeviceId);
+            }
+            await el.play();
+            this.monitorTap = dest;
+            this.monitorAudio = el;
+            this.log('[AudioController] Voice self-monitor started.');
+            return true;
+        } catch (err) {
+            this.error('[AudioController] Failed to start voice self-monitor:', err);
+            this.stopVoiceMonitor();
+            return false;
+        }
+    }
+
+    stopVoiceMonitor() {
+        if (this.monitorAudio) {
+            this.monitorAudio.pause();
+            this.monitorAudio.srcObject = null;
+            this.monitorAudio = null;
+        }
+        if (this.monitorTap) {
+            try { this.micGain.disconnect(this.monitorTap); } catch { /* already gone */ }
+            this.monitorTap = null;
+            this.log('[AudioController] Voice self-monitor stopped.');
         }
     }
 

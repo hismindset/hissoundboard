@@ -7,9 +7,10 @@ import ConfirmModal from './ConfirmModal';
 
 interface LibraryProps {
     onEditSound: (soundId: string) => void;
+    onEditEffect: (presetId: string) => void;
 }
 
-const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
+const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
     const library = useSoundboardStore((s) => s.library);
     const grid = useSoundboardStore((s) => s.grid);
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
@@ -214,7 +215,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                         {VOICE_EFFECT_PRESETS.map((preset) => {
                             const isEffectActive = activeVoiceEffect === preset.id;
                             return (
-                                <button
+                                <div
                                     key={preset.id}
                                     draggable
                                     onDragStart={(e) => {
@@ -224,7 +225,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                     onClick={() => toggleVoiceEffect(preset.id)}
                                     title={`${preset.description} – Klick zum ${isEffectActive ? 'Deaktivieren' : 'Aktivieren'}, oder aufs Grid ziehen`}
                                     className={`
-                                        flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl cursor-grab active:cursor-grabbing
+                                        group/effect relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl cursor-grab active:cursor-grabbing
                                         text-[10px] font-medium transition-all duration-150 select-none border
                                         ${isEffectActive
                                             ? 'bg-accent/20 border-accent/60 text-accent-light shadow-glow-purple'
@@ -232,9 +233,18 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                                         }
                                     `}
                                 >
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onEditEffect(preset.id); }}
+                                        title="Effekt bearbeiten"
+                                        className="absolute top-0.5 right-0.5 p-0.5 rounded-md text-surface-500 opacity-0 group-hover/effect:opacity-100 hover:text-accent-light hover:bg-surface-600/60 transition-all"
+                                    >
+                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                                        </svg>
+                                    </button>
                                     <span className="text-base leading-none">{preset.emoji}</span>
                                     <span className="truncate max-w-full">{preset.name}</span>
-                                </button>
+                                </div>
                             );
                         })}
                     </div>
