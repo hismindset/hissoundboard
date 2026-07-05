@@ -41,6 +41,7 @@ interface ElectronApi {
     setRemotePin: (pin: string) => void;
     sendSoundsForRemote: (sounds: unknown) => void;
     createVirtualSink: () => Promise<{ success: boolean; error?: string }>;
+    setLinuxMicLoopback: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
     getPlatform: () => Promise<'darwin' | 'win32' | 'linux' | string>;
     copyToClipboard: (text: string) => Promise<boolean>;
     openExternal: (url: string) => Promise<boolean>;

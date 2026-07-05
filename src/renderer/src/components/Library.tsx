@@ -239,8 +239,8 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                         })}
                     </div>
                     {platform === 'linux' ? (
-                        <p className="text-[9px] text-yellow-500/70 mt-1.5 leading-snug">
-                            Auf Linux wird das Mikro auf OS-Ebene gemischt – die In-App-Effekte greifen dort nicht.
+                        <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">
+                            Bei aktivem Effekt läuft das Mikro durch die App (etwas mehr Latenz); ohne Effekt übernimmt wieder das latenzfreie OS-Routing.
                         </p>
                     ) : !micDeviceId ? (
                         <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">

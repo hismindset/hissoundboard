@@ -26,8 +26,15 @@ class AudioController {
     private voiceEffectId: string | null = null;
 
     // Host platform. On Linux the OS (PulseAudio/PipeWire) mixes the mic into the
-    // virtual sink, so the in-app Web Audio passthrough is disabled there.
+    // virtual sink, so the in-app Web Audio passthrough is disabled there —
+    // except while a voice effect is active (see switchLinuxMicPath).
     private platform: string = '';
+    // Linux only: true while the mic runs through the app graph (effect active)
+    // instead of the OS loopback.
+    private linuxAppMicActive = false;
+    // Serializes Linux loopback/app-mic switches so rapid effect toggles can
+    // never leave both paths (= doubled voice) or neither path active.
+    private linuxMicSwitch: Promise<void> = Promise.resolve();
 
     // Internal state mirrored from store
     private settings: AudioSettings = {
@@ -90,8 +97,9 @@ class AudioController {
 
     private get usesOsMicMixing(): boolean {
         // Linux mixes the mic at the OS level (module-loopback), so the app must
-        // NOT also pass the mic through — that would double the voice.
-        return this.platform === 'linux';
+        // NOT also pass the mic through — that would double the voice. While a
+        // voice effect is active the loopback is unloaded and the app takes over.
+        return this.platform === 'linux' && !this.linuxAppMicActive;
     }
 
     /** Initialize controller with settings from store */
@@ -190,9 +198,14 @@ class AudioController {
         // 2. Update Output Device (Where the Mic goes)
         // CRITICAL: We now move the ENTIRE AudioContext to the output device
         await this.updateMicOutputDevice();
+        if (this.platform === 'linux' && !this.settings.outputDeviceId) {
+            this.warn('[AudioController] Linux: no Output Device selected — mic/effect will play to the default output instead of the virtual sink.');
+        }
 
         // 3. Update Input Source
-        if (!this.settings.micDeviceId) {
+        // On Linux users normally never pick a mic in Settings (the OS loopback
+        // handles it), so fall back to the default input device there.
+        if (!this.settings.micDeviceId && this.platform !== 'linux') {
             this.log('[AudioController] No mic device selected, stopping.');
             this.stopMic();
             return;
@@ -202,15 +215,30 @@ class AudioController {
         this.stopMic();
 
         try {
-            this.log(`[AudioController] Requesting Mic Access: ${this.settings.micDeviceId}`);
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    deviceId: { exact: this.settings.micDeviceId },
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                }
-            });
+            this.log(`[AudioController] Requesting Mic Access: ${this.settings.micDeviceId || '(default)'}`);
+            const audio: MediaTrackConstraints = {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+            };
+            if (this.settings.micDeviceId) {
+                audio.deviceId = { exact: this.settings.micDeviceId };
+            } else if (this.platform === 'linux') {
+                // Never capture our own virtual source / a monitor — that would
+                // feed the sink back into itself (feedback loop). Prefer the
+                // first real hardware input if the default looks unsafe.
+                const hw = await this.findLinuxHardwareMic();
+                if (hw) audio.deviceId = { exact: hw };
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio });
+
+            // Safety net: verify we didn't grab the virtual source after all.
+            const trackLabel = stream.getAudioTracks()[0]?.label || '';
+            if (this.platform === 'linux' && /HISSOUNDBOARD|monitor/i.test(trackLabel)) {
+                this.error(`[AudioController] Refusing to use "${trackLabel}" as mic (would cause feedback). Select a hardware mic in Settings.`);
+                stream.getTracks().forEach((t) => t.stop());
+                return;
+            }
             this.log(`[AudioController] Got Mic Stream: ${stream.id}`);
 
             this.micSource = this.audioContext.createMediaStreamSource(stream);
@@ -222,6 +250,26 @@ class AudioController {
 
         } catch (err) {
             this.error('[AudioController] Failed to access microphone:', err);
+        }
+    }
+
+    /** Linux: find a real hardware mic, skipping our virtual source and monitors. */
+    private async findLinuxHardwareMic(): Promise<string | null> {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const bad = /HISSOUNDBOARD|monitor/i;
+            const hw = devices.find(
+                (d) =>
+                    d.kind === 'audioinput' &&
+                    d.deviceId !== 'default' &&
+                    d.deviceId !== 'communications' &&
+                    d.label &&
+                    !bad.test(d.label)
+            );
+            return hw ? hw.deviceId : null;
+        } catch (err) {
+            this.warn('[AudioController] Could not enumerate devices for Linux mic fallback:', err);
+            return null;
         }
     }
 
@@ -272,8 +320,9 @@ class AudioController {
     /**
      * Enable/disable a voice effect on the mic passthrough.
      * Pass null to go back to the clean (unprocessed) voice.
-     * Note: on Linux the mic is mixed at OS level and bypasses this graph,
-     * so effects have no audible result there.
+     * On Linux this also switches the mic path: the OS-level loopback is
+     * unloaded and the mic routed through the app graph while an effect is
+     * active, and restored when the effect is turned off.
      */
     setVoiceEffect(presetId: string | null) {
         if (presetId === this.voiceEffectId) return;
@@ -304,6 +353,62 @@ class AudioController {
                 this.warn('[AudioController] Failed to resume AudioContext for effect:', err)
             );
         }
+
+        if (this.platform === 'linux') {
+            this.queueLinuxMicPathUpdate();
+        }
+    }
+
+    /**
+     * Linux only: reconcile the mic path with the current effect state.
+     * Effect active  → unload the OS loopback, then start the in-app passthrough.
+     * Effect off     → stop the in-app passthrough, then restore the loopback.
+     * Steps are queued so overlapping toggles execute strictly in order, and
+     * the handover direction guarantees both paths are never live at once.
+     */
+    private queueLinuxMicPathUpdate() {
+        this.linuxMicSwitch = this.linuxMicSwitch
+            .then(async () => {
+                const wantAppMic = this.voiceEffectId !== null;
+                if (wantAppMic === this.linuxAppMicActive) return;
+
+                const api = (window as any).api;
+                if (!api?.setLinuxMicLoopback) {
+                    this.warn('[AudioController] setLinuxMicLoopback bridge missing, keeping OS loopback.');
+                    return;
+                }
+
+                if (wantAppMic) {
+                    this.log('[AudioController] Linux: switching mic to in-app path (effect active)...');
+                    const res = await api.setLinuxMicLoopback(false);
+                    if (!res?.success) {
+                        // Loopback still running — do NOT start the app path on top of it.
+                        this.error('[AudioController] Failed to unload OS mic loopback:', res?.error);
+                        return;
+                    }
+                    this.linuxAppMicActive = true;
+                    await this.updateMicRouting();
+                    if (!this.micSource) {
+                        // In-app capture failed — without a fallback the user
+                        // would be completely muted. Restore the OS loopback
+                        // (the effect stays selected but is inaudible).
+                        this.error('[AudioController] In-app mic failed to start; restoring OS loopback.');
+                        this.linuxAppMicActive = false;
+                        await api.setLinuxMicLoopback(true);
+                    }
+                } else {
+                    this.log('[AudioController] Linux: switching mic back to OS loopback...');
+                    this.linuxAppMicActive = false;
+                    this.stopMic();
+                    const res = await api.setLinuxMicLoopback(true);
+                    if (!res?.success) {
+                        this.error('[AudioController] Failed to restore OS mic loopback:', res?.error);
+                    }
+                }
+            })
+            .catch((err) => {
+                this.error('[AudioController] Linux mic path switch failed:', err);
+            });
     }
 
     private stopMic() {

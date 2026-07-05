@@ -120,7 +120,7 @@ Apply fun effects to your voice on top of the mic passthrough:
 Notes:
 - Effects always start **disabled** on app launch, and **Escape (panic)** also resets your voice to clean.
 - You won't hear the effect yourself (same as the mic passthrough — no feedback), but voice chat will.
-- **Linux:** the mic is mixed at the OS level (PulseAudio/PipeWire loopback) and bypasses the in-app audio graph, so voice effects are currently not audible on Linux.
+- **Linux:** normally the mic is mixed at the OS level (zero extra latency). While a voice effect is active, the app temporarily unloads the OS loopback and routes the mic through its own audio engine instead (slightly higher latency); turning the effect off restores the OS loopback automatically.
 
 ## 📱 Remote Control
 1. Make sure your phone/tablet is on the **same network** as the PC.
