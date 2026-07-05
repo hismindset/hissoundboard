@@ -34,47 +34,47 @@ export interface VoiceEffectPreset {
 
 export const VOICE_EFFECT_PRESETS: VoiceEffectPreset[] = [
     {
-        id: 'robot', name: 'Roboter', emoji: '🤖', description: 'Ringmodulator – klassische Roboterstimme',
+        id: 'robot', name: 'Robot', emoji: '🤖', description: 'Ring modulator – classic robot voice',
         params: [
             { id: 'frequency', label: 'Modulation', min: 10, max: 300, step: 1, default: 50, unit: 'Hz' },
-            { id: 'distortion', label: 'Verzerrung', min: 0, max: 10, step: 0.5, default: 2 },
+            { id: 'distortion', label: 'Distortion', min: 0, max: 10, step: 0.5, default: 2 },
         ],
     },
     {
-        id: 'deep', name: 'Tief', emoji: '🐻', description: 'Stimme nach unten gepitcht',
+        id: 'deep', name: 'Deep', emoji: '🐻', description: 'Voice pitched down',
         params: [
-            { id: 'semitones', label: 'Tonhöhe', min: -12, max: -1, step: 1, default: -5, unit: 'HT' },
+            { id: 'semitones', label: 'Pitch', min: -12, max: -1, step: 1, default: -5, unit: 'st' },
         ],
     },
     {
-        id: 'high', name: 'Hoch', emoji: '🐿️', description: 'Stimme nach oben gepitcht',
+        id: 'high', name: 'High', emoji: '🐿️', description: 'Voice pitched up',
         params: [
-            { id: 'semitones', label: 'Tonhöhe', min: 1, max: 12, step: 1, default: 5, unit: 'HT' },
+            { id: 'semitones', label: 'Pitch', min: 1, max: 12, step: 1, default: 5, unit: 'st' },
         ],
     },
     {
-        id: 'cathedral', name: 'Kirche', emoji: '⛪', description: 'Großer Hall wie in einer Kathedrale',
+        id: 'cathedral', name: 'Cathedral', emoji: '⛪', description: 'Big reverb, like in a cathedral',
         params: [
-            { id: 'duration', label: 'Hallzeit', min: 0.5, max: 6, step: 0.1, default: 2.8, unit: 's' },
-            { id: 'decay', label: 'Abklingen', min: 1, max: 8, step: 0.1, default: 3.5 },
-            { id: 'wet', label: 'Hall-Anteil', min: 0, max: 1.5, step: 0.05, default: 0.85 },
-            { id: 'dry', label: 'Direktsignal', min: 0, max: 1, step: 0.05, default: 0.6 },
+            { id: 'duration', label: 'Reverb Time', min: 0.5, max: 6, step: 0.1, default: 2.8, unit: 's' },
+            { id: 'decay', label: 'Decay', min: 1, max: 8, step: 0.1, default: 3.5 },
+            { id: 'wet', label: 'Reverb Amount', min: 0, max: 1.5, step: 0.05, default: 0.85 },
+            { id: 'dry', label: 'Dry Signal', min: 0, max: 1, step: 0.05, default: 0.6 },
         ],
     },
     {
-        id: 'chorus', name: 'Chor', emoji: '🎶', description: 'Mehrstimmiger Chorus-Effekt',
+        id: 'chorus', name: 'Chorus', emoji: '🎶', description: 'Multi-voice chorus effect',
         params: [
-            { id: 'rate', label: 'Geschwindigkeit', min: 0.25, max: 3, step: 0.05, default: 1, unit: '×' },
-            { id: 'depth', label: 'Tiefe', min: 0.25, max: 3, step: 0.05, default: 1, unit: '×' },
-            { id: 'mix', label: 'Stimmen-Anteil', min: 0, max: 1, step: 0.05, default: 0.45 },
+            { id: 'rate', label: 'Rate', min: 0.25, max: 3, step: 0.05, default: 1, unit: '×' },
+            { id: 'depth', label: 'Depth', min: 0.25, max: 3, step: 0.05, default: 1, unit: '×' },
+            { id: 'mix', label: 'Voices Mix', min: 0, max: 1, step: 0.05, default: 0.45 },
         ],
     },
     {
-        id: 'megaphone', name: 'Megafon', emoji: '📣', description: 'Verzerrtes, blechernes Megafon',
+        id: 'megaphone', name: 'Megaphone', emoji: '📣', description: 'Distorted, tinny megaphone',
         params: [
-            { id: 'highpass', label: 'Tiefen-Filter', min: 100, max: 1500, step: 10, default: 500, unit: 'Hz' },
-            { id: 'lowpass', label: 'Höhen-Filter', min: 1000, max: 8000, step: 50, default: 3200, unit: 'Hz' },
-            { id: 'distortion', label: 'Verzerrung', min: 0, max: 20, step: 0.5, default: 8 },
+            { id: 'highpass', label: 'Low Cut', min: 100, max: 1500, step: 10, default: 500, unit: 'Hz' },
+            { id: 'lowpass', label: 'High Cut', min: 1000, max: 8000, step: 50, default: 3200, unit: 'Hz' },
+            { id: 'distortion', label: 'Distortion', min: 0, max: 20, step: 0.5, default: 8 },
         ],
     },
 ];

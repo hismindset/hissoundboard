@@ -113,10 +113,10 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 Apply fun effects to your voice on top of the mic passthrough:
 
 1. Enable **Microphone Injection** (see above) — effects are applied to the mic signal before it reaches the Output cable.
-2. Open the **Library** panel: the "Stimmeffekte" section lists all presets (**Robot, Deep, High, Cathedral, Chorus, Megaphone**). Click one to toggle it.
+2. Open the **Library** panel: the "Voice Effects" section lists all presets (**Robot, Deep, High, Cathedral, Chorus, Megaphone**). Click one to toggle it.
 3. **Hotkeys:** Drag an effect onto any grid slot — triggering that slot (click, numpad hotkey, or remote) then toggles the effect instead of playing a sound.
 4. Only **one effect is active at a time**; activating another one replaces it, activating the same one again switches back to your clean voice.
-5. **Customize effects:** every effect has editable parameters (e.g. pitch amount, modulation frequency, reverb length, distortion). Open the editor via the pencil icon on an effect in the Library, or right-click an effect slot on the grid → "Effekt bearbeiten". Changes apply **live** while the effect is running, are saved persistently, and can be reverted with the Reset button. The editor also offers a **self-monitor** ("Abhören") that plays your processed voice on the monitor device — use headphones to avoid feedback.
+5. **Customize effects:** every effect has editable parameters (e.g. pitch amount, modulation frequency, reverb length, distortion). Open the editor via the pencil icon on an effect in the Library, or right-click an effect slot on the grid → "Edit Effect". Changes apply **live** while the effect is running, are saved persistently, and can be reverted with the Reset button. The editor also offers a **Monitor** mode that plays your processed voice on the monitor device — use headphones to avoid feedback.
 
 Notes:
 - Effects always start **disabled** on app launch, and **Escape (panic)** also resets your voice to clean.

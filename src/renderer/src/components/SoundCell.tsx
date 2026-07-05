@@ -212,7 +212,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                             {effectPreset.name}
                         </span>
                         <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full ${isActive ? 'bg-accent/20 text-accent-light' : 'bg-neon-blue/15 text-neon-blue/80'}`}>
-                            {isActive ? 'Aktiv' : 'Effekt'}
+                            {isActive ? 'Active' : 'Effect'}
                         </span>
                     </>
                 ) : sound ? (
@@ -265,7 +265,7 @@ const SoundCell: React.FC<SoundCellProps> = ({ page, slot, numpadLabel, onEditSo
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
                             </svg>
-                            Effekt bearbeiten
+                            Edit Effect
                         </button>
                     )}
                     <button

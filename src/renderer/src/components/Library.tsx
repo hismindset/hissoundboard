@@ -209,7 +209,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                 {/* Voice Effects */}
                 <div className="px-3 py-2 border-b border-surface-700/30">
                     <h4 className="text-[10px] font-bold uppercase tracking-wider text-surface-400 mb-1.5 flex items-center gap-1.5">
-                        🎭 Stimmeffekte
+                        🎭 Voice Effects
                     </h4>
                     <div className="grid grid-cols-3 gap-1.5">
                         {VOICE_EFFECT_PRESETS.map((preset) => {
@@ -223,7 +223,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                                         e.dataTransfer.effectAllowed = 'copy';
                                     }}
                                     onClick={() => toggleVoiceEffect(preset.id)}
-                                    title={`${preset.description} – Klick zum ${isEffectActive ? 'Deaktivieren' : 'Aktivieren'}, oder aufs Grid ziehen`}
+                                    title={`${preset.description} – click to ${isEffectActive ? 'disable' : 'enable'}, or drag onto the grid`}
                                     className={`
                                         group/effect relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl cursor-grab active:cursor-grabbing
                                         text-[10px] font-medium transition-all duration-150 select-none border
@@ -235,7 +235,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                                 >
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onEditEffect(preset.id); }}
-                                        title="Effekt bearbeiten"
+                                        title="Edit effect"
                                         className="absolute top-0.5 right-0.5 p-0.5 rounded-md text-surface-500 opacity-0 group-hover/effect:opacity-100 hover:text-accent-light hover:bg-surface-600/60 transition-all"
                                     >
                                         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -250,11 +250,11 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                     </div>
                     {platform === 'linux' ? (
                         <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">
-                            Bei aktivem Effekt läuft das Mikro durch die App (etwas mehr Latenz); ohne Effekt übernimmt wieder das latenzfreie OS-Routing.
+                            While an effect is active, the mic runs through the app (slightly more latency); with no effect, the zero-latency OS routing takes over again.
                         </p>
                     ) : !micDeviceId ? (
                         <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">
-                            Effekte wirken auf das Mikrofon-Passthrough. Wähle zuerst ein Mikrofon in den Einstellungen.
+                            Effects apply to the microphone passthrough. Select a microphone in Settings first.
                         </p>
                     ) : null}
                 </div>

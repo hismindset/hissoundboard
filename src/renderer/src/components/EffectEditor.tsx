@@ -140,7 +140,7 @@ const EffectEditor: React.FC<EffectEditorProps> = ({ presetId, onClose }) => {
                             : 'bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-white'
                             }`}
                     >
-                        {isActive ? '● Effekt aktiv' : '○ Effekt aktivieren'}
+                        {isActive ? '● Effect active' : '○ Activate effect'}
                     </button>
                     <button
                         onClick={handleToggleMonitor}
@@ -148,9 +148,9 @@ const EffectEditor: React.FC<EffectEditorProps> = ({ presetId, onClose }) => {
                         title={
                             !micAvailable
                                 ? (platform === 'linux'
-                                    ? 'Zum Abhören zuerst den Effekt aktivieren'
-                                    : 'Zum Abhören zuerst ein Mikrofon in den Einstellungen wählen')
-                                : 'Eigene (verzerrte) Stimme auf dem Monitor-Gerät abhören'
+                                    ? 'Activate the effect first to monitor'
+                                    : 'Select a microphone in Settings first to monitor')
+                                : 'Listen to your own (processed) voice on the monitor device'
                         }
                         className={`flex-1 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${!micAvailable
                             ? 'bg-surface-800/50 text-surface-600 cursor-not-allowed'
@@ -159,11 +159,11 @@ const EffectEditor: React.FC<EffectEditorProps> = ({ presetId, onClose }) => {
                                 : 'bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-white'
                             }`}
                     >
-                        {monitoring ? '🎧 Abhören an' : '🎧 Abhören'}
+                        {monitoring ? '🎧 Monitoring on' : '🎧 Monitor'}
                     </button>
                     <button
                         onClick={handleReset}
-                        title="Alle Regler auf Standardwerte zurücksetzen"
+                        title="Reset all sliders to their default values"
                         className="px-3 py-2 rounded-xl text-xs font-medium bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-white transition-all duration-200"
                     >
                         ↺ Reset
@@ -172,7 +172,7 @@ const EffectEditor: React.FC<EffectEditorProps> = ({ presetId, onClose }) => {
 
                 {monitoring && (
                     <p className="text-[10px] text-yellow-500/80 mt-2">
-                        ⚠ Kopfhörer verwenden — über Lautsprecher entsteht eine Rückkopplung.
+                        ⚠ Use headphones — speakers will cause feedback.
                     </p>
                 )}
             </div>
