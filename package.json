@@ -1,7 +1,7 @@
 {
     "name": "hissoundboard",
     "productName": "HISSOUNDBOARD",
-    "version": "1.2.3",
+    "version": "1.2.5",
     "description": "A modern, dark-themed soundboard application with dual audio output, global shortcuts, and remote control.",
     "author": "Florian Göhring (HISMINDSET)",
     "license": "MIT",
@@ -42,7 +42,7 @@
         "@types/qrcode": "^1.5.6",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
-        "@types/uuid": "^10.0.0",
+        "@types/uuid": "^11.0.0",
         "@types/ws": "^8.18.1",
         "@vitejs/plugin-react": "^6.0.3",
         "electron": "^42.4.1",
