@@ -1,14 +1,16 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import type { Sound } from '../types/sound';
 import { formatSoundName, generateId } from '../lib/utils';
+import { VOICE_EFFECT_PRESETS, effectSlotId } from '../lib/voiceEffects';
 import ConfirmModal from './ConfirmModal';
 
 interface LibraryProps {
     onEditSound: (soundId: string) => void;
+    onEditEffect: (presetId: string) => void;
 }
 
-const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
+const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
     const library = useSoundboardStore((s) => s.library);
     const grid = useSoundboardStore((s) => s.grid);
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
@@ -17,6 +19,15 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
     const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
     const unassignSlot = useSoundboardStore((s) => s.unassignSlot);
     const getUsedSoundIds = useSoundboardStore((s) => s.getUsedSoundIds);
+    const activeVoiceEffect = useSoundboardStore((s) => s.activeVoiceEffect);
+    const toggleVoiceEffect = useSoundboardStore((s) => s.toggleVoiceEffect);
+    const micDeviceId = useSoundboardStore((s) => s.audioSettings?.micDeviceId || '');
+
+    // On Linux the mic is mixed at OS level and bypasses the in-app effect chain.
+    const [platform, setPlatform] = useState('');
+    useEffect(() => {
+        window.api?.getPlatform?.().then((p: string) => setPlatform(p)).catch(() => { });
+    }, []);
 
     const [search, setSearch] = useState('');
     const [showUnusedOnly, setShowUnusedOnly] = useState(false);
@@ -193,6 +204,59 @@ const Library: React.FC<LibraryProps> = ({ onEditSound }) => {
                         />
                         Nur unbenutzte anzeigen
                     </label>
+                </div>
+
+                {/* Voice Effects */}
+                <div className="px-3 py-2 border-b border-surface-700/30">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-surface-400 mb-1.5 flex items-center gap-1.5">
+                        🎭 Voice Effects
+                    </h4>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        {VOICE_EFFECT_PRESETS.map((preset) => {
+                            const isEffectActive = activeVoiceEffect === preset.id;
+                            return (
+                                <div
+                                    key={preset.id}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        e.dataTransfer.setData('application/x-soundboard-id', effectSlotId(preset.id));
+                                        e.dataTransfer.effectAllowed = 'copy';
+                                    }}
+                                    onClick={() => toggleVoiceEffect(preset.id)}
+                                    title={`${preset.description} – click to ${isEffectActive ? 'disable' : 'enable'}, or drag onto the grid`}
+                                    className={`
+                                        group/effect relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl cursor-grab active:cursor-grabbing
+                                        text-[10px] font-medium transition-all duration-150 select-none border
+                                        ${isEffectActive
+                                            ? 'bg-accent/20 border-accent/60 text-accent-light shadow-glow-purple'
+                                            : 'bg-surface-800/60 border-surface-700/40 text-surface-300 hover:border-neon-blue/40 hover:bg-surface-700/50'
+                                        }
+                                    `}
+                                >
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onEditEffect(preset.id); }}
+                                        title="Edit effect"
+                                        className="absolute top-0.5 right-0.5 p-0.5 rounded-md text-surface-500 opacity-0 group-hover/effect:opacity-100 hover:text-accent-light hover:bg-surface-600/60 transition-all"
+                                    >
+                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                                        </svg>
+                                    </button>
+                                    <span className="text-base leading-none">{preset.emoji}</span>
+                                    <span className="truncate max-w-full">{preset.name}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {platform === 'linux' ? (
+                        <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">
+                            While an effect is active, the mic runs through the app (slightly more latency); with no effect, the zero-latency OS routing takes over again.
+                        </p>
+                    ) : !micDeviceId ? (
+                        <p className="text-[9px] text-surface-500 mt-1.5 leading-snug">
+                            Effects apply to the microphone passthrough. Select a microphone in Settings first.
+                        </p>
+                    ) : null}
                 </div>
 
                 {/* Sound List */}

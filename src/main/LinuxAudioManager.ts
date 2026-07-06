@@ -147,6 +147,44 @@ export class LinuxAudioManager {
         }
     }
 
+    /**
+     * Unloads the mic loopback (used while a voice effect is active: the app
+     * then routes the mic through its own audio graph instead, and both paths
+     * at once would double the voice). Also finds loopbacks left over from a
+     * previous run, where we don't know the module ID. Idempotent.
+     */
+    async unloadMicLoopback(): Promise<{ success: boolean; error?: string }> {
+        let id = this.loopbackModuleId;
+        if (!id || id === 'existing') {
+            try {
+                const { stdout } = await execAsync('pactl list short modules');
+                const line = stdout
+                    .split('\n')
+                    .find(l => l.includes('module-loopback') && l.includes(`sink=${LinuxAudioManager.SINK_NAME}`));
+                id = line ? line.split('\t')[0].trim() : null;
+            } catch (error: any) {
+                console.error('[LinuxAudio] Failed to look up loopback module:', error);
+                return { success: false, error: error.message || 'Failed to list modules' };
+            }
+        }
+
+        if (!id) {
+            console.log('[LinuxAudio] No mic loopback to unload.');
+            this.loopbackModuleId = null;
+            return { success: true };
+        }
+
+        try {
+            await execAsync(`pactl unload-module ${id}`);
+            console.log(`[LinuxAudio] Unloaded mic loopback (module ${id}).`);
+            this.loopbackModuleId = null;
+            return { success: true };
+        } catch (error: any) {
+            console.error('[LinuxAudio] Failed to unload mic loopback:', error);
+            return { success: false, error: error.message || 'Unknown error unloading loopback' };
+        }
+    }
+
     /** Checks if our remapped virtual source already exists. */
     private async checkSourceExists(): Promise<boolean> {
         try {

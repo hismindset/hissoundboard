@@ -602,6 +602,16 @@ const setupIpcHandlers = () => {
         return await linuxAudio.setupAutoMix();
     });
 
+    // Linux: toggle the OS-level mic loopback. While a voice effect is active
+    // the renderer routes the mic through its own audio graph instead, so the
+    // loopback must be off — otherwise the voice would be doubled.
+    ipcMain.handle('set-mic-loopback', async (_event, enabled: boolean) => {
+        if (process.platform !== 'linux') return { success: true };
+        return enabled
+            ? await linuxAudio.createMicLoopback()
+            : await linuxAudio.unloadMicLoopback();
+    });
+
     ipcMain.on('set-shortcut-config', (_event, config) => {
         shortcutConfig = {
             mode: config.mode || 'numpad',

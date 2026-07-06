@@ -1,5 +1,6 @@
 import type { Sound } from '../types/sound';
 import type { AudioSettings } from './store';
+import { createVoiceEffectChain, resolveEffectParams, type VoiceEffectChain } from './voiceEffects';
 
 /**
  * AudioController handles dual-output audio playback.
@@ -18,10 +19,27 @@ class AudioController {
     private audioContext: AudioContext;
     private micSource: MediaStreamAudioSourceNode | null = null;
     private micGain: GainNode;
+    // Voice effect chain sits between effectBus and micGain:
+    // micSource -> effectBus -> [effect] -> micGain -> destination
+    private effectBus: GainNode;
+    private voiceEffect: VoiceEffectChain | null = null;
+    private voiceEffectId: string | null = null;
+    // Resolved params of the active chain (JSON), to skip no-op rebuilds.
+    private voiceEffectParamsJson = '';
+    // Self-monitor tap (effect editor): micGain -> MediaStreamDestination -> <audio> on the monitor device.
+    private monitorTap: MediaStreamAudioDestinationNode | null = null;
+    private monitorAudio: HTMLAudioElement | null = null;
 
     // Host platform. On Linux the OS (PulseAudio/PipeWire) mixes the mic into the
-    // virtual sink, so the in-app Web Audio passthrough is disabled there.
+    // virtual sink, so the in-app Web Audio passthrough is disabled there —
+    // except while a voice effect is active (see switchLinuxMicPath).
     private platform: string = '';
+    // Linux only: true while the mic runs through the app graph (effect active)
+    // instead of the OS loopback.
+    private linuxAppMicActive = false;
+    // Serializes Linux loopback/app-mic switches so rapid effect toggles can
+    // never leave both paths (= doubled voice) or neither path active.
+    private linuxMicSwitch: Promise<void> = Promise.resolve();
 
     // Internal state mirrored from store
     private settings: AudioSettings = {
@@ -69,6 +87,11 @@ class AudioController {
         this.micGain = this.audioContext.createGain();
         this.micGain.gain.value = 1.0;
         this.micGain.connect(this.audioContext.destination);
+
+        // Effect bus: mic connects here; with no effect it feeds micGain directly.
+        this.effectBus = this.audioContext.createGain();
+        this.effectBus.gain.value = 1.0;
+        this.effectBus.connect(this.micGain);
     }
 
     /** Tell the controller which OS it runs on (affects mic routing strategy). */
@@ -79,8 +102,9 @@ class AudioController {
 
     private get usesOsMicMixing(): boolean {
         // Linux mixes the mic at the OS level (module-loopback), so the app must
-        // NOT also pass the mic through — that would double the voice.
-        return this.platform === 'linux';
+        // NOT also pass the mic through — that would double the voice. While a
+        // voice effect is active the loopback is unloaded and the app takes over.
+        return this.platform === 'linux' && !this.linuxAppMicActive;
     }
 
     /** Initialize controller with settings from store */
@@ -179,9 +203,14 @@ class AudioController {
         // 2. Update Output Device (Where the Mic goes)
         // CRITICAL: We now move the ENTIRE AudioContext to the output device
         await this.updateMicOutputDevice();
+        if (this.platform === 'linux' && !this.settings.outputDeviceId) {
+            this.warn('[AudioController] Linux: no Output Device selected — mic/effect will play to the default output instead of the virtual sink.');
+        }
 
         // 3. Update Input Source
-        if (!this.settings.micDeviceId) {
+        // On Linux users normally never pick a mic in Settings (the OS loopback
+        // handles it), so fall back to the default input device there.
+        if (!this.settings.micDeviceId && this.platform !== 'linux') {
             this.log('[AudioController] No mic device selected, stopping.');
             this.stopMic();
             return;
@@ -191,26 +220,61 @@ class AudioController {
         this.stopMic();
 
         try {
-            this.log(`[AudioController] Requesting Mic Access: ${this.settings.micDeviceId}`);
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    deviceId: { exact: this.settings.micDeviceId },
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                }
-            });
+            this.log(`[AudioController] Requesting Mic Access: ${this.settings.micDeviceId || '(default)'}`);
+            const audio: MediaTrackConstraints = {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+            };
+            if (this.settings.micDeviceId) {
+                audio.deviceId = { exact: this.settings.micDeviceId };
+            } else if (this.platform === 'linux') {
+                // Never capture our own virtual source / a monitor — that would
+                // feed the sink back into itself (feedback loop). Prefer the
+                // first real hardware input if the default looks unsafe.
+                const hw = await this.findLinuxHardwareMic();
+                if (hw) audio.deviceId = { exact: hw };
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio });
+
+            // Safety net: verify we didn't grab the virtual source after all.
+            const trackLabel = stream.getAudioTracks()[0]?.label || '';
+            if (this.platform === 'linux' && /HISSOUNDBOARD|monitor/i.test(trackLabel)) {
+                this.error(`[AudioController] Refusing to use "${trackLabel}" as mic (would cause feedback). Select a hardware mic in Settings.`);
+                stream.getTracks().forEach((t) => t.stop());
+                return;
+            }
             this.log(`[AudioController] Got Mic Stream: ${stream.id}`);
 
             this.micSource = this.audioContext.createMediaStreamSource(stream);
-            this.micSource.connect(this.micGain);
-            this.log('[AudioController] Mic Graph Connected: Source -> Gain -> Destination');
+            this.micSource.connect(this.effectBus);
+            this.log('[AudioController] Mic Graph Connected: Source -> EffectBus -> Gain -> Destination');
 
             // DEBUG: Check signal level
             this.debugSignalLevel();
 
         } catch (err) {
             this.error('[AudioController] Failed to access microphone:', err);
+        }
+    }
+
+    /** Linux: find a real hardware mic, skipping our virtual source and monitors. */
+    private async findLinuxHardwareMic(): Promise<string | null> {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const bad = /HISSOUNDBOARD|monitor/i;
+            const hw = devices.find(
+                (d) =>
+                    d.kind === 'audioinput' &&
+                    d.deviceId !== 'default' &&
+                    d.deviceId !== 'communications' &&
+                    d.label &&
+                    !bad.test(d.label)
+            );
+            return hw ? hw.deviceId : null;
+        } catch (err) {
+            this.warn('[AudioController] Could not enumerate devices for Linux mic fallback:', err);
+            return null;
         }
     }
 
@@ -256,6 +320,147 @@ class AudioController {
                 this.warn('[AudioController] Failed to set AudioContext output device:', err);
             }
         }
+    }
+
+    /**
+     * Enable/disable a voice effect on the mic passthrough.
+     * Pass null to go back to the clean (unprocessed) voice.
+     * On Linux this also switches the mic path: the OS-level loopback is
+     * unloaded and the mic routed through the app graph while an effect is
+     * active, and restored when the effect is turned off.
+     *
+     * `paramOverrides` are the user's edited values for the preset (partial;
+     * merged with defaults). Changing params of the active effect rebuilds
+     * the chain in place.
+     */
+    setVoiceEffect(presetId: string | null, paramOverrides?: Record<string, number>) {
+        const paramsJson = presetId ? JSON.stringify(resolveEffectParams(presetId, paramOverrides)) : '';
+        if (presetId === this.voiceEffectId && paramsJson === this.voiceEffectParamsJson) return;
+        this.log(`[AudioController] setVoiceEffect: ${presetId ?? 'off'}`);
+        this.voiceEffectId = presetId;
+        this.voiceEffectParamsJson = paramsJson;
+
+        // Tear down the old chain and detach the bus from whatever it fed.
+        if (this.voiceEffect) {
+            this.voiceEffect.dispose();
+            this.voiceEffect = null;
+        }
+        try { this.effectBus.disconnect(); } catch { /* not connected */ }
+
+        const chain = presetId ? createVoiceEffectChain(this.audioContext, presetId, paramOverrides) : null;
+        if (chain) {
+            this.effectBus.connect(chain.input);
+            chain.output.connect(this.micGain);
+            this.voiceEffect = chain;
+        } else {
+            if (presetId) this.warn(`[AudioController] Unknown voice effect preset: ${presetId}`);
+            this.effectBus.connect(this.micGain);
+        }
+
+        // Make sure the graph is actually running (e.g. effect toggled before
+        // any sound/mic activity resumed the context).
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch((err) =>
+                this.warn('[AudioController] Failed to resume AudioContext for effect:', err)
+            );
+        }
+
+        if (this.platform === 'linux') {
+            this.queueLinuxMicPathUpdate();
+        }
+    }
+
+    /**
+     * Start self-monitoring for the effect editor: taps the processed mic
+     * signal (post effect + gain) and plays it on the MONITOR device so the
+     * user can hear their own effected voice while tweaking parameters.
+     * Headphones recommended — speakers would feed back into the mic.
+     */
+    async startVoiceMonitor(): Promise<boolean> {
+        if (this.monitorTap) return true;
+        try {
+            const dest = this.audioContext.createMediaStreamDestination();
+            this.micGain.connect(dest);
+            const el = new Audio();
+            el.srcObject = dest.stream;
+            if (this.settings.monitorDeviceId && typeof (el as any).setSinkId === 'function') {
+                await (el as any).setSinkId(this.settings.monitorDeviceId);
+            }
+            await el.play();
+            this.monitorTap = dest;
+            this.monitorAudio = el;
+            this.log('[AudioController] Voice self-monitor started.');
+            return true;
+        } catch (err) {
+            this.error('[AudioController] Failed to start voice self-monitor:', err);
+            this.stopVoiceMonitor();
+            return false;
+        }
+    }
+
+    stopVoiceMonitor() {
+        if (this.monitorAudio) {
+            this.monitorAudio.pause();
+            this.monitorAudio.srcObject = null;
+            this.monitorAudio = null;
+        }
+        if (this.monitorTap) {
+            try { this.micGain.disconnect(this.monitorTap); } catch { /* already gone */ }
+            this.monitorTap = null;
+            this.log('[AudioController] Voice self-monitor stopped.');
+        }
+    }
+
+    /**
+     * Linux only: reconcile the mic path with the current effect state.
+     * Effect active  → unload the OS loopback, then start the in-app passthrough.
+     * Effect off     → stop the in-app passthrough, then restore the loopback.
+     * Steps are queued so overlapping toggles execute strictly in order, and
+     * the handover direction guarantees both paths are never live at once.
+     */
+    private queueLinuxMicPathUpdate() {
+        this.linuxMicSwitch = this.linuxMicSwitch
+            .then(async () => {
+                const wantAppMic = this.voiceEffectId !== null;
+                if (wantAppMic === this.linuxAppMicActive) return;
+
+                const api = (window as any).api;
+                if (!api?.setLinuxMicLoopback) {
+                    this.warn('[AudioController] setLinuxMicLoopback bridge missing, keeping OS loopback.');
+                    return;
+                }
+
+                if (wantAppMic) {
+                    this.log('[AudioController] Linux: switching mic to in-app path (effect active)...');
+                    const res = await api.setLinuxMicLoopback(false);
+                    if (!res?.success) {
+                        // Loopback still running — do NOT start the app path on top of it.
+                        this.error('[AudioController] Failed to unload OS mic loopback:', res?.error);
+                        return;
+                    }
+                    this.linuxAppMicActive = true;
+                    await this.updateMicRouting();
+                    if (!this.micSource) {
+                        // In-app capture failed — without a fallback the user
+                        // would be completely muted. Restore the OS loopback
+                        // (the effect stays selected but is inaudible).
+                        this.error('[AudioController] In-app mic failed to start; restoring OS loopback.');
+                        this.linuxAppMicActive = false;
+                        await api.setLinuxMicLoopback(true);
+                    }
+                } else {
+                    this.log('[AudioController] Linux: switching mic back to OS loopback...');
+                    this.linuxAppMicActive = false;
+                    this.stopMic();
+                    const res = await api.setLinuxMicLoopback(true);
+                    if (!res?.success) {
+                        this.error('[AudioController] Failed to restore OS mic loopback:', res?.error);
+                    }
+                }
+            })
+            .catch((err) => {
+                this.error('[AudioController] Linux mic path switch failed:', err);
+            });
     }
 
     private stopMic() {
