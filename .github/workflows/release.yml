@@ -149,14 +149,14 @@ jobs:
 
       - name: Setup Python for native modules
         if: runner.os == 'macOS'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.14.6'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.18.0
           cache: npm
 
       - name: Install dependencies
@@ -193,7 +193,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           name: HISSOUNDBOARD ${{ needs.validate.outputs.version }}
