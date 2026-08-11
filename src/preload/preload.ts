@@ -97,6 +97,10 @@ const api = {
     createVirtualSink: (): Promise<{ success: boolean; error?: string }> =>
         ipcRenderer.invoke('create-virtual-sink'),
 
+    /** Linux: enable/disable the OS-level mic loopback (off while a voice effect is active) */
+    setLinuxMicLoopback: (enabled: boolean): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('set-mic-loopback', enabled),
+
     /** Get the host platform ('darwin' | 'win32' | 'linux') */
     getPlatform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke('get-platform'),
 

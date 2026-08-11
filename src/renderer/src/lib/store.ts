@@ -34,6 +34,14 @@ interface SoundboardState {
     audioSettings: AudioSettings;
     customSoundsDir: string;
 
+    // ── Voice Effect ─────────────────────────────────────────────────────
+    /** Active voice-changer preset id (null = clean voice). Not persisted:
+     *  the app always starts with the unprocessed voice. */
+    activeVoiceEffect: string | null;
+    /** User-edited effect parameters per preset id (partial overrides of the
+     *  preset defaults). Persisted. */
+    voiceEffectParams: Record<string, Record<string, number>>;
+
     // ── Shortcut Config ──────────────────────────────────────────────────
     shortcutMode: ShortcutMode;
 
@@ -72,6 +80,12 @@ interface SoundboardState {
     // Audio
     setAudioSettings: (settings: Partial<AudioSettings>) => void;
     setCustomSoundsDir: (dir: string) => void;
+
+    // Voice effect
+    setActiveVoiceEffect: (presetId: string | null) => void;
+    toggleVoiceEffect: (presetId: string) => void;
+    setVoiceEffectParam: (presetId: string, paramId: string, value: number) => void;
+    resetVoiceEffectParams: (presetId: string) => void;
 
     // Active sounds
     setActive: (soundId: string) => void;
@@ -140,6 +154,8 @@ export const useSoundboardStore = create<SoundboardState>()(
             },
 
             customSoundsDir: '',
+            activeVoiceEffect: null,
+            voiceEffectParams: {},
             shortcutMode: 'numpad',
             remotePin: '',
             libraryOpen: false,
@@ -263,6 +279,30 @@ export const useSoundboardStore = create<SoundboardState>()(
                 })),
 
             setCustomSoundsDir: (dir) => set({ customSoundsDir: dir }),
+
+            // ── Voice Effect ─────────────────────────────────────────────────
+
+            setActiveVoiceEffect: (presetId) => set({ activeVoiceEffect: presetId }),
+
+            toggleVoiceEffect: (presetId) =>
+                set((state) => ({
+                    activeVoiceEffect: state.activeVoiceEffect === presetId ? null : presetId,
+                })),
+
+            setVoiceEffectParam: (presetId, paramId, value) =>
+                set((state) => ({
+                    voiceEffectParams: {
+                        ...state.voiceEffectParams,
+                        [presetId]: { ...state.voiceEffectParams[presetId], [paramId]: value },
+                    },
+                })),
+
+            resetVoiceEffectParams: (presetId) =>
+                set((state) => {
+                    const next = { ...state.voiceEffectParams };
+                    delete next[presetId];
+                    return { voiceEffectParams: next };
+                }),
 
             // ── Active Sounds ────────────────────────────────────────────────
 
@@ -401,6 +441,7 @@ export const useSoundboardStore = create<SoundboardState>()(
                 pages: state.pages,
                 activePageId: state.activePageId,
                 audioSettings: state.audioSettings,
+                voiceEffectParams: state.voiceEffectParams,
                 shortcutMode: state.shortcutMode,
                 // activeSounds: state.activeSounds, // DO NOT PERSIST SETS
                 customSoundsDir: state.customSoundsDir,

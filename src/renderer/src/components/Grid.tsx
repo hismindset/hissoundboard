@@ -8,9 +8,10 @@ const NUMPAD_LAYOUT = [7, 8, 9, 4, 5, 6, 1, 2, 3];
 
 interface GridProps {
     onEditSound: (soundId: string) => void;
+    onEditEffect: (presetId: string) => void;
 }
 
-const Grid: React.FC<GridProps> = ({ onEditSound }) => {
+const Grid: React.FC<GridProps> = ({ onEditSound, onEditEffect }) => {
     const activePageId = useSoundboardStore((s) => s.activePageId);
 
     // If no page is active (e.g. empty state), show nothing or a placeholder
@@ -32,6 +33,7 @@ const Grid: React.FC<GridProps> = ({ onEditSound }) => {
                     slot={gridIndex}
                     numpadLabel={numpadNum}
                     onEditSound={onEditSound}
+                    onEditEffect={onEditEffect}
                 />
             ))}
         </div>
