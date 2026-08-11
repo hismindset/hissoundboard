@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useSoundboardStore } from '../lib/store';
 import { AudioSetupWizard } from './AudioSetupWizard';
 import { WaylandShortcuts } from './WaylandShortcuts';
+import SyncFolderSection from './SyncFolderSection';
 
 const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // New Audio Settings Slice
@@ -15,8 +16,6 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [showWizard, setShowWizard] = useState(false);
     const [platform, setPlatform] = useState<string>('');
 
-    const customSoundsDir = useSoundboardStore((s) => s.customSoundsDir);
-    const setCustomSoundsDir = useSoundboardStore((s) => s.setCustomSoundsDir);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
     const remotePin = useSoundboardStore((s) => s.remotePin);
@@ -27,7 +26,6 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [serverUrl, setServerUrl] = useState<string>('');
-    const [defaultSoundsDir, setDefaultSoundsDir] = useState<string>('');
 
     // Load audio output devices AND Input devices
     useEffect(() => {
@@ -56,11 +54,6 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         });
     }, []);
 
-    // Load default sounds dir
-    useEffect(() => {
-        window.api.getSoundsDir().then((dir) => setDefaultSoundsDir(dir));
-    }, []);
-
     // Detect host platform (affects how the microphone is mixed)
     useEffect(() => {
         window.api.getPlatform?.().then((p) => setPlatform(p)).catch(() => { });
@@ -80,11 +73,6 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 .catch((err) => console.error('QR generation failed:', err));
         });
     }, []);
-
-    // Sync custom sounds dir to main process
-    useEffect(() => {
-        window.api.setSoundsDir(customSoundsDir);
-    }, [customSoundsDir]);
 
     return (
         <div className="w-full max-w-md space-y-6 animate-fade-in">
@@ -254,35 +242,8 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             </div>
 
-            {/* Sounds Directory */}
-            <div className="space-y-3">
-                <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
-                    Location
-                </h3>
-                <div className="bg-surface-800/60 rounded-xl border border-surface-600/30 p-3 space-y-2">
-                    <p className="text-xs text-surface-300">Active Directory:</p>
-                    <p className="text-[11px] text-white/70 font-mono break-all bg-surface-900/50 rounded-lg px-2.5 py-1.5">
-                        {customSoundsDir || defaultSoundsDir || 'Loading...'}
-                    </p>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={customSoundsDir}
-                            onChange={(e) => setCustomSoundsDir(e.target.value)}
-                            placeholder="Use Default..."
-                            className="flex-1 px-2.5 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/50 transition-colors"
-                        />
-                        {customSoundsDir && (
-                            <button
-                                onClick={() => setCustomSoundsDir('')}
-                                className="px-3 py-1.5 rounded-lg text-[10px] text-surface-400 hover:text-white bg-surface-700/60 hover:bg-surface-700 transition-colors"
-                            >
-                                Reset
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
+            {/* Sync Folder */}
+            <SyncFolderSection />
 
             {/* Keyboard Shortcuts */}
             <div className="space-y-4">

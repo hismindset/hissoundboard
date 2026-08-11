@@ -3,22 +3,19 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Sound, GridSlot } from '../types/sound';
 import type { Page } from '../types/page';
+import type { PersistedPayload } from '../../../shared/sync-types';
 
 /** "pageId-slotIndex" */
 const slotKey = (pageId: string, slot: number) => `${pageId}-${slot}`;
 
 export type ShortcutMode = 'numpad' | 'standard';
 
-export interface AudioSettings {
-    monitorVolume: number; // 0.0 to 1.0
-    outputVolume: number; // 0.0 to 1.0
-    micVolume: number; // 0.0 to 2.0 (200%)
-    monitorMuted: boolean;
-    outputMuted: boolean;
-    monitorDeviceId: string;
-    outputDeviceId: string;
-    micDeviceId: string;
-}
+// Re-exported from the shared module so the rest of the renderer (e.g.
+// audioController.ts) can keep importing `AudioSettings` from here — the
+// main process owns the canonical definition in shared/sync-types.ts since
+// it also needs the shape to read/write local-settings.json.
+export type { AudioSettings } from '../../../shared/sync-types';
+import type { AudioSettings } from '../../../shared/sync-types';
 
 interface SoundboardState {
     // ── Library (source of truth) ────────────────────────────────────────
@@ -32,7 +29,6 @@ interface SoundboardState {
 
     // ── Audio Settings ───────────────────────────────────────────────────
     audioSettings: AudioSettings;
-    customSoundsDir: string;
 
     // ── Voice Effect ─────────────────────────────────────────────────────
     /** Active voice-changer preset id (null = clean voice). Not persisted:
@@ -79,7 +75,6 @@ interface SoundboardState {
 
     // Audio
     setAudioSettings: (settings: Partial<AudioSettings>) => void;
-    setCustomSoundsDir: (dir: string) => void;
 
     // Voice effect
     setActiveVoiceEffect: (presetId: string | null) => void;
@@ -112,25 +107,64 @@ interface SoundboardState {
     getUsedSoundIds: () => Set<string>;
 }
 
-// Debounce helper for storage
-const debounce = (fn: Function, ms: number) => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    return (...args: any[]) => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => fn(...args), ms);
-    };
+// Key the legacy (pre-v7) localStorage persistence used. Kept only as a
+// read-only fallback source for the migration below — see `getItem`.
+const LEGACY_STORAGE_KEY = 'opensoundboard-storage';
+
+// The persist middleware's setItem fires on every state change; debounce it
+// so rapid edits (e.g. dragging a volume slider) don't spam IPC/disk writes.
+const PERSIST_DEBOUNCE_MS = 1000;
+let pendingPersist: { timeoutId: ReturnType<typeof setTimeout>; value: string } | null = null;
+
+const writeToMain = (value: string) => {
+    // main wants the parsed { state, version } object, not a JSON string.
+    window.api.persistState(JSON.parse(value) as PersistedPayload);
 };
 
-// Custom storage with debounce
-const debouncedStorage = {
-    getItem: (name: string) => {
-        const item = localStorage.getItem(name);
-        return item ? JSON.parse(item) : null;
+/** Fire any pending debounced write immediately. Called on `beforeunload` so
+ *  an edit made right before the app closes isn't dropped. */
+export const flushPendingPersist = () => {
+    if (!pendingPersist) return;
+    clearTimeout(pendingPersist.timeoutId);
+    const { value } = pendingPersist;
+    pendingPersist = null;
+    writeToMain(value);
+};
+
+window.addEventListener('beforeunload', flushPendingPersist);
+
+// IPC-backed storage adapter: the main process is the sole owner of the
+// persisted files (config.json + local-settings.json). Hydration reads the
+// current state from main synchronously (the store hydrates synchronously
+// today, so a small blocking IPC call preserves that contract); writes are
+// debounced and sent fire-and-forget.
+//
+// zustand's `createJSONStorage` expects `getItem` to return a JSON STRING
+// (it JSON.parses the result itself), so unlike the old localStorage-backed
+// adapter, we must stringify here rather than hand back a parsed object.
+const ipcStorage = {
+    getItem: (_name: string): string | null => {
+        const initial = window.api.getInitialPersistedState();
+        if (initial != null) {
+            return JSON.stringify(initial);
+        }
+        // Main has nothing yet (first launch on the v7 backend). Fall back to
+        // the legacy v6 localStorage payload so the migrate step below can
+        // run; the first persistState() call then writes it into main's files.
+        return localStorage.getItem(LEGACY_STORAGE_KEY);
     },
-    setItem: debounce((name: string, value: any) => {
-        localStorage.setItem(name, JSON.stringify(value));
-    }, 1000), // 1 second debounce
-    removeItem: (name: string) => localStorage.removeItem(name),
+    setItem: (_name: string, value: string) => {
+        if (pendingPersist) clearTimeout(pendingPersist.timeoutId);
+        pendingPersist = {
+            value,
+            timeoutId: setTimeout(() => {
+                pendingPersist = null;
+                writeToMain(value);
+            }, PERSIST_DEBOUNCE_MS),
+        };
+    },
+    // main owns the files; there is nothing to remove locally.
+    removeItem: (_name: string) => { },
 };
 
 export const useSoundboardStore = create<SoundboardState>()(
@@ -153,7 +187,6 @@ export const useSoundboardStore = create<SoundboardState>()(
                 micDeviceId: '',
             },
 
-            customSoundsDir: '',
             activeVoiceEffect: null,
             voiceEffectParams: {},
             shortcutMode: 'numpad',
@@ -278,8 +311,6 @@ export const useSoundboardStore = create<SoundboardState>()(
                     audioSettings: { ...state.audioSettings, ...updates },
                 })),
 
-            setCustomSoundsDir: (dir) => set({ customSoundsDir: dir }),
-
             // ── Voice Effect ─────────────────────────────────────────────────
 
             setActiveVoiceEffect: (presetId) => set({ activeVoiceEffect: presetId }),
@@ -387,8 +418,8 @@ export const useSoundboardStore = create<SoundboardState>()(
         }),
         {
             name: 'opensoundboard-storage',
-            version: 6, // Bump version to add mic settings
-            storage: createJSONStorage(() => debouncedStorage),
+            version: 7, // Bump version: main process now owns persistence (config.json + local-settings.json)
+            storage: createJSONStorage(() => ipcStorage),
             migrate: (persistedState: any, version: number) => {
                 let state = persistedState;
 
@@ -433,6 +464,20 @@ export const useSoundboardStore = create<SoundboardState>()(
                     };
                 }
 
+                // Migration v6 -> v7 (Main process owns persistence now)
+                if (version <= 6) {
+                    // Free-text custom sounds dir is gone; hand it to main as the
+                    // "legacy" sounds dir so existing users keep their sound files
+                    // until they pick a real sync folder (WP2).
+                    if (typeof state.customSoundsDir === 'string' && state.customSoundsDir) {
+                        window.api.setLegacySoundsDir?.(state.customSoundsDir);
+                    }
+                    delete state.customSoundsDir;
+                    // remotePin used to be lost on every restart (never persisted) —
+                    // default it so the field always exists going forward.
+                    state.remotePin = state.remotePin ?? '';
+                }
+
                 return state;
             },
             partialize: (state) => ({
@@ -444,7 +489,7 @@ export const useSoundboardStore = create<SoundboardState>()(
                 voiceEffectParams: state.voiceEffectParams,
                 shortcutMode: state.shortcutMode,
                 // activeSounds: state.activeSounds, // DO NOT PERSIST SETS
-                customSoundsDir: state.customSoundsDir,
+                remotePin: state.remotePin,
                 hasCompletedSetup: state.hasCompletedSetup,
             }),
             merge: (persistedState: any, currentState) => {

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron';
+import type { PersistedPayload, FolderPickResult, ApplyFolderAction, ApplyFolderResult, SyncStatus, SyncedConfig } from '../shared/sync-types';
 
 export interface TriggerSoundPayload {
     page?: number; // Legacy index support
@@ -49,6 +50,32 @@ const api = {
         return () => ipcRenderer.removeListener('wayland-warning', handler);
     },
 
+    /** Notice: config.json was unreadable at startup and got recovered from
+     *  its .bak backup (config-sync WP3). */
+    onSyncRecoveredFromBackup: (callback: () => void) => {
+        const handler = () => callback();
+        ipcRenderer.on('sync-recovered-from-backup', handler);
+        return () => ipcRenderer.removeListener('sync-recovered-from-backup', handler);
+    },
+
+    /** Live update: config.json changed on disk outside this app (another
+     *  device, a sync client) and was already validated + normalized by main
+     *  (config-sync WP4). */
+    onExternalStateUpdate: (callback: (synced: SyncedConfig) => void) => {
+        const handler = (_event: IpcRendererEvent, synced: SyncedConfig) => callback(synced);
+        ipcRenderer.on('state:external-update', handler);
+        return () => ipcRenderer.removeListener('state:external-update', handler);
+    },
+
+    /** Notice: the sync folder now contains a config.json written by a newer
+     *  app version. Writes are paused (writesSuppressed) until the folder is
+     *  back at a compatible schema version (config-sync WP4). */
+    onSyncNewerVersion: (callback: () => void) => {
+        const handler = () => callback();
+        ipcRenderer.on('sync-newer-version', handler);
+        return () => ipcRenderer.removeListener('sync-newer-version', handler);
+    },
+
     /** Receive recorded key codes from main process */
     onKeyRecorded: (callback: (keyCode: number) => void) => {
         const handler = (_event: IpcRendererEvent, keyCode: number) => callback(keyCode);
@@ -90,8 +117,32 @@ const api = {
     /** Get the path to the sounds directory */
     getSoundsDir: (): Promise<string> => ipcRenderer.invoke('get-sounds-dir'),
 
-    /** Set custom sounds directory */
-    setSoundsDir: (dir: string) => ipcRenderer.send('set-sounds-dir', dir),
+    // ─── Persisted State (config-sync) ───────────────────────────────────────
+
+    /** Synchronously read the current persisted state from main (used to
+     *  hydrate the zustand store on startup). Null if main has nothing yet. */
+    getInitialPersistedState: (): PersistedPayload | null =>
+        ipcRenderer.sendSync('state:get-initial'),
+
+    /** Push the latest persisted state to main (debounced by the caller). */
+    persistState: (payload: PersistedPayload) => ipcRenderer.send('state:persist', payload),
+
+    /** One-time migration hint: honor a pre-v7 free-text custom sounds dir
+     *  until a real sync folder is chosen. */
+    setLegacySoundsDir: (dir: string) => ipcRenderer.send('sync:set-legacy-sounds-dir', dir),
+
+    /** Get the current sync folder (if any) and resolved sounds directory. */
+    getSyncStatus: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:get-status'),
+
+    /** Open the native folder picker and classify the chosen folder. */
+    pickSyncFolder: (): Promise<FolderPickResult> => ipcRenderer.invoke('sync:pick-folder'),
+
+    /** Apply a folder-selection decision (fresh start / move / adopt). */
+    applySyncFolder: (folder: string, action: ApplyFolderAction): Promise<ApplyFolderResult> =>
+        ipcRenderer.invoke('sync:apply-folder', folder, action),
+
+    /** Reveal the current sync root in the OS file manager. */
+    openSyncFolder: (): Promise<string> => ipcRenderer.invoke('sync:open-folder'),
 
     /** Create Linux Virtual Sink + mic loopback (PulseAudio / PipeWire) */
     createVirtualSink: (): Promise<{ success: boolean; error?: string }> =>
