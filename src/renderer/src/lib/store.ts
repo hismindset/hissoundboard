@@ -151,7 +151,21 @@ const ipcStorage = {
         // Main has nothing yet (first launch on the v7 backend). Fall back to
         // the legacy v6 localStorage payload so the migrate step below can
         // run; the first persistState() call then writes it into main's files.
-        return localStorage.getItem(LEGACY_STORAGE_KEY);
+        //
+        // The pre-v7 storage adapter double-stringified its payload: zustand's
+        // createJSONStorage passed it an already-serialized string, which it
+        // ran through JSON.stringify again before hitting localStorage. So the
+        // stored value is usually `"\"{\\\"state\\\":...}\""` — one JSON.parse
+        // yields the actual payload STRING, which is exactly what this getItem
+        // must return. Unwrap that layer; tolerate single-encoded values too.
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacy == null) return null;
+        try {
+            const unwrapped = JSON.parse(legacy);
+            return typeof unwrapped === 'string' ? unwrapped : legacy;
+        } catch {
+            return legacy;
+        }
     },
     setItem: (_name: string, value: string) => {
         if (pendingPersist) clearTimeout(pendingPersist.timeoutId);
