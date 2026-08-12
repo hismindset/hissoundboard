@@ -8,6 +8,10 @@ interface ConfirmModalProps {
     warnings?: string[];
     confirmLabel?: string;
     cancelLabel?: string;
+    /** 'danger' (default) styles the confirm button red, for destructive
+     *  actions. 'primary' uses the app's accent color, for non-destructive
+     *  confirmations (e.g. adopting a folder config). */
+    variant?: 'danger' | 'primary';
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -18,6 +22,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     warnings,
     confirmLabel = 'Delete',
     cancelLabel = 'Cancel',
+    variant = 'danger',
     onConfirm,
     onCancel,
 }) => {
@@ -53,7 +58,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                     </button>
                     <button
                         onClick={onConfirm}
-                        className="px-4 py-2 rounded-xl text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors"
+                        className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${variant === 'primary'
+                            ? 'bg-accent/20 text-accent-light border-accent/30 hover:bg-accent/30'
+                            : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'
+                            }`}
                     >
                         {confirmLabel}
                     </button>
