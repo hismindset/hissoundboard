@@ -45,7 +45,17 @@ dmg:
   sign: false
 
 win:
-  target: nsis
+  # Pin to x64 explicitly: without an arch, electron-builder cross-builds for
+  # the HOST architecture, so building on Apple Silicon silently produces a
+  # Windows-on-ARM64 installer that can't run on ordinary (x64) Windows PCs.
+  # x64 also runs fine under Windows 11 ARM's built-in x64 emulation, so this
+  # doesn't lose ARM support, it just avoids shipping an ARM64-only binary by
+  # accident. GitHub Actions' windows-latest runner is x64 already, so CI
+  # builds are unaffected by this change.
+  target:
+    - target: nsis
+      arch:
+        - x64
   icon: resources/icon.ico
 
 nsis:
