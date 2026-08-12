@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import type { UpdateOffer } from '../../shared/updater-types';
 import Grid from './components/Grid';
 import PageList from './components/PageList';
 import Settings from './components/Settings';
@@ -7,6 +8,7 @@ import SoundEditor from './components/SoundEditor';
 import EffectEditor from './components/EffectEditor';
 import HelpModal from './components/HelpModal';
 import EasterEggModal from './components/EasterEggModal';
+import UpdateModal from './components/UpdateModal';
 import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
@@ -23,6 +25,7 @@ const App: React.FC = () => {
     const [showEasterEgg, setShowEasterEgg] = useState(false);
     const [showSyncRecoveredNotice, setShowSyncRecoveredNotice] = useState(false);
     const [showNewerVersionNotice, setShowNewerVersionNotice] = useState(false);
+    const [updateOffer, setUpdateOffer] = useState<UpdateOffer | null>(null);
 
     const clearAllActive = useSoundboardStore((s) => s.clearAllActive);
     const library = useSoundboardStore((s) => s.library);
@@ -263,6 +266,16 @@ const App: React.FC = () => {
         };
     }, []);
 
+    // Subscribe to update availability notifications
+    useEffect(() => {
+        const unsubscribe = window.api.updater?.onUpdateAvailable?.((offer) => {
+            setUpdateOffer(offer);
+        });
+        return () => {
+            unsubscribe?.();
+        };
+    }, []);
+
     // Push the current board to connected remotes whenever it changes, so the
     // remote stays in sync after edits and reliably receives data after connecting.
     useEffect(() => {
@@ -385,6 +398,13 @@ const App: React.FC = () => {
 
             {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
             {showEasterEgg && <EasterEggModal onClose={() => setShowEasterEgg(false)} />}
+
+            {updateOffer && (
+                <UpdateModal
+                    offer={updateOffer}
+                    onClose={() => setUpdateOffer(null)}
+                />
+            )}
         </div>
     );
 }

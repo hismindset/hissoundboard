@@ -18,6 +18,16 @@ on:
         description: Mark the GitHub Release as a prerelease
         required: true
         type: boolean
+      summary:
+        description: Release summary shown in the in-app update dialog
+        required: false
+        default: ''
+        type: string
+      breaking:
+        description: Breaking changes note for the release
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -34,6 +44,16 @@ on:
         required: true
         default: false
         type: boolean
+      summary:
+        description: Release summary shown in the in-app update dialog
+        required: false
+        default: ''
+        type: string
+      breaking:
+        description: Breaking changes note for the release
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -192,12 +212,55 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Compose release body
+        env:
+          SUMMARY: ${{ inputs.summary }}
+          BREAKING: ${{ inputs.breaking }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("fs");
+
+          const summary = process.env.SUMMARY || "";
+          const breaking = process.env.BREAKING || "";
+
+          if (!summary && !breaking) {
+            console.log("No custom release notes; using auto-generated notes only.");
+            process.exit(0);
+          }
+
+          let body = "";
+
+          if (summary) {
+            body += `## Summary\n\n${summary}\n`;
+          }
+
+          if (breaking) {
+            if (body) body += "\n";
+            body += `## ⚠️ Breaking Changes\n\n${breaking}\n`;
+          }
+
+          fs.writeFileSync("release-body.md", body);
+          console.log("Release body written to release-body.md");
+          NODE
+
+      - name: Check if release body file exists
+        id: check-body
+        run: |
+          if [[ -f release-body.md ]]; then
+            echo "body_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "body_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           name: HISSOUNDBOARD ${{ needs.validate.outputs.version }}
           files: release-assets/*
+          body_path: ${{ steps.check-body.outputs.body_exists == 'true' && 'release-body.md' || '' }}
           generate_release_notes: true
           draft: ${{ needs.validate.outputs.draft }}
           prerelease: ${{ needs.validate.outputs.prerelease }}

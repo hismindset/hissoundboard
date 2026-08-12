@@ -4,6 +4,7 @@ import { useSoundboardStore } from '../lib/store';
 import { AudioSetupWizard } from './AudioSetupWizard';
 import { WaylandShortcuts } from './WaylandShortcuts';
 import SyncFolderSection from './SyncFolderSection';
+import type { UpToDateInfo, UpdateError } from '../../../shared/updater-types';
 
 const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // New Audio Settings Slice
@@ -15,6 +16,11 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]); // New state for mics
     const [showWizard, setShowWizard] = useState(false);
     const [platform, setPlatform] = useState<string>('');
+
+    // Updates state
+    const [currentVersion, setCurrentVersion] = useState<string>('');
+    const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+    const [updateStatus, setUpdateStatus] = useState<string | null>(null);
 
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
@@ -57,6 +63,40 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // Detect host platform (affects how the microphone is mixed)
     useEffect(() => {
         window.api.getPlatform?.().then((p) => setPlatform(p)).catch(() => { });
+    }, []);
+
+    // Load current version
+    useEffect(() => {
+        window.api.updater?.getCurrentVersion?.().then(setCurrentVersion).catch(() => { });
+    }, []);
+
+    // Subscribe to update status changes (clear "Checking..." on any update event)
+    useEffect(() => {
+        const unsubUpToDate = window.api.updater?.onUpToDate?.((info: UpToDateInfo) => {
+            setCheckingForUpdates(false);
+            setUpdateStatus(`You're up to date (v${info.currentVersion}).`);
+            // Clear status after a few seconds
+            setTimeout(() => setUpdateStatus(null), 4000);
+        });
+
+        const unsubError = window.api.updater?.onError?.((err: UpdateError) => {
+            setCheckingForUpdates(false);
+            if (err.manual) {
+                setUpdateStatus(`Error: ${err.message}`);
+                setTimeout(() => setUpdateStatus(null), 4000);
+            }
+        });
+
+        const unsubUpdateAvailable = window.api.updater?.onUpdateAvailable?.(() => {
+            setCheckingForUpdates(false);
+            setUpdateStatus(null);
+        });
+
+        return () => {
+            unsubUpToDate?.();
+            unsubError?.();
+            unsubUpdateAvailable?.();
+        };
     }, []);
 
     // Generate QR code locally (no third-party service → privacy + offline)
@@ -284,6 +324,43 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             {/* Wayland / KDE global shortcut helper (Linux only) */}
             {platform === 'linux' && <WaylandShortcuts />}
+
+            {/* Updates */}
+            <div className="space-y-4">
+                <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
+                    Updates
+                </h3>
+
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={async () => {
+                            setCheckingForUpdates(true);
+                            setUpdateStatus(null);
+                            try {
+                                await window.api.updater?.checkManual?.();
+                            } catch (err) {
+                                setCheckingForUpdates(false);
+                                setUpdateStatus(`Error: ${err instanceof Error ? err.message : 'Check failed'}`);
+                            }
+                        }}
+                        disabled={checkingForUpdates}
+                        className="px-3 py-2 rounded-xl text-sm font-medium bg-accent/20 text-accent-light border border-accent/30 hover:bg-accent/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {checkingForUpdates ? 'Checking…' : 'Check for updates'}
+                    </button>
+                    {currentVersion && (
+                        <span className="text-xs text-surface-400">
+                            v{currentVersion}
+                        </span>
+                    )}
+                </div>
+
+                {updateStatus && (
+                    <p className={`text-xs ${updateStatus.startsWith('Error:') ? 'text-red-400' : 'text-surface-400'}`}>
+                        {updateStatus}
+                    </p>
+                )}
+            </div>
 
             {/* Remote Control */}
             <div className="space-y-3">

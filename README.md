@@ -39,6 +39,13 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 ### 🎨 Interface
 - **Dark, gaming-inspired UI** with waveform previews (wavesurfer.js).
 
+### 🔄 Updates
+- **In-app auto-update** (packaged builds only): On startup, the app checks GitHub Releases for a newer version.
+- **Update dialog**: Shows the new version, the release's Summary section, and — for major version jumps — a highlighted breaking-changes warning.
+- **Install options**: **Install now** (Windows/Linux: downloads with progress and restarts automatically; macOS: **Download update** button opens the GitHub release instead, since unsigned builds cannot self-update), **Later** (prompts again at a later start, earliest 24 hours later), or **Skip this version** (won't ask again for that exact version; the next newer release prompts again).
+- **Settings panel**: Shows your current version and has a manual **Check for updates** button; manual checks ignore Later/Skip state.
+- **User data unchanged**: Your boards, sounds, and settings are never affected by updates.
+
 </details>
 
 > Cross-platform desktop app built with **Electron + React + TypeScript** — runs on Windows, macOS, and Linux.
@@ -56,7 +63,6 @@ Not yet implemented — ideas under consideration:
 - **Horizontal layout for Standard mode**: In Standard (non-numpad) mode, lay sounds out left-to-right (e.g. 1–7) instead of a 3×3 grid.
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
-- **Auto-updater**: Check for new releases and update in place (via `electron-updater`). Note: works for Windows (NSIS) and Linux (AppImage); macOS auto-update requires a signed/notarized build.
 - **Localization** — add German (i18n), or keep the UI English-only for wider open-source reach?
 
 ---

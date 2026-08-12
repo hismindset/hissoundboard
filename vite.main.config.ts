@@ -20,7 +20,7 @@ export default defineConfig({
             fileName: () => '[name].js',
         },
         rollupOptions: {
-            external: ['electron', 'uiohook-napi', 'express', 'ws', 'http', 'https', 'fs', 'path', 'os', 'crypto', 'child_process', 'bufferutil', 'utf-8-validate', 'electron-squirrel-startup'],
+            external: ['electron', 'uiohook-napi', 'express', 'ws', 'http', 'https', 'fs', 'path', 'os', 'crypto', 'child_process', 'bufferutil', 'utf-8-validate', 'electron-squirrel-startup', 'electron-updater'],
             output: {
                 entryFileNames: '[name].js',
             },

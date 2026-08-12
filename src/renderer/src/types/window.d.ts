@@ -6,6 +6,12 @@ import type {
     SyncStatus,
     SyncedConfig,
 } from '../../../shared/sync-types';
+import type {
+    UpdateOffer,
+    UpdateProgress,
+    UpdateError,
+    UpToDateInfo,
+} from '../../../shared/updater-types';
 
 export interface TriggerSoundPayload {
     page?: number;
@@ -21,6 +27,19 @@ export interface PageConfig {
 export interface ShortcutConfig {
     mode: 'numpad' | 'standard';
     pages: PageConfig[];
+}
+
+interface UpdaterApi {
+    checkManual(): Promise<void>;
+    install(): Promise<void>;
+    postpone(): Promise<void>;
+    skip(version: string): Promise<void>;
+    openDownloadPage(): Promise<void>;
+    getCurrentVersion(): Promise<string>;
+    onUpdateAvailable(cb: (offer: UpdateOffer) => void): () => void;
+    onDownloadProgress(cb: (p: UpdateProgress) => void): () => void;
+    onError(cb: (e: UpdateError) => void): () => void;
+    onUpToDate(cb: (v: UpToDateInfo) => void): () => void;
 }
 
 interface ElectronApi {
@@ -44,6 +63,9 @@ interface ElectronApi {
     // Help menu
     onShowHelp?: (callback: () => void) => () => void;
     onShowEasterEgg?: (callback: () => void) => () => void;
+
+    // Auto-update API
+    updater?: UpdaterApi;
 
     saveSoundFile: (sourcePath: string, fileName: string) => Promise<string>;
     getLocalIp: () => Promise<{ ip: string; port: number }>;
