@@ -21,6 +21,8 @@ const App: React.FC = () => {
     const [editingEffectId, setEditingEffectId] = useState<string | null>(null);
     const [showHelp, setShowHelp] = useState(false);
     const [showEasterEgg, setShowEasterEgg] = useState(false);
+    const [showSyncRecoveredNotice, setShowSyncRecoveredNotice] = useState(false);
+    const [showNewerVersionNotice, setShowNewerVersionNotice] = useState(false);
 
     const clearAllActive = useSoundboardStore((s) => s.clearAllActive);
     const library = useSoundboardStore((s) => s.library);
@@ -215,6 +217,9 @@ const App: React.FC = () => {
 
         const cleanupHelp = window.api.onShowHelp?.(() => setShowHelp(true));
         const cleanupEasterEgg = window.api.onShowEasterEgg?.(() => setShowEasterEgg(true));
+        const cleanupSyncRecovered = window.api.onSyncRecoveredFromBackup?.(() => {
+            setShowSyncRecoveredNotice(true);
+        });
 
         return () => {
             if (cleanupWayland) cleanupWayland();
@@ -223,8 +228,40 @@ const App: React.FC = () => {
             cleanupRemote();
             cleanupHelp?.();
             cleanupEasterEgg?.();
+            cleanupSyncRecovered?.();
         };
     }, [library, grid, pages, activePageId, clearAllActive, setActive, setInactive, toggleVoiceEffect, setActiveVoiceEffect, getAllSoundsForRemote, setShowWaylandWarning]);
+
+    // Live-apply state pushed from main when config.json changes on disk
+    // outside this app (another device, a sync client) — config-sync WP4.
+    // The store's persist middleware then re-serializes this state and sends
+    // it back to main, which hash-compares against what it just wrote and
+    // skips the write — no write-loop back to the watcher.
+    useEffect(() => {
+        const cleanupExternalUpdate = window.api.onExternalStateUpdate?.((synced) => {
+            const syncedPages = synced.pages ?? [];
+            const validActivePageId = syncedPages.some((p) => p.id === synced.activePageId)
+                ? synced.activePageId
+                : (syncedPages[0]?.id ?? '');
+            useSoundboardStore.setState({
+                library: synced.library,
+                grid: synced.grid,
+                pages: syncedPages,
+                activePageId: validActivePageId,
+                voiceEffectParams: synced.voiceEffectParams,
+                shortcutMode: synced.shortcutMode,
+            });
+        });
+
+        const cleanupNewerVersion = window.api.onSyncNewerVersion?.(() => {
+            setShowNewerVersionNotice(true);
+        });
+
+        return () => {
+            cleanupExternalUpdate?.();
+            cleanupNewerVersion?.();
+        };
+    }, []);
 
     // Push the current board to connected remotes whenever it changes, so the
     // remote stays in sync after edits and reliably receives data after connecting.
@@ -263,6 +300,40 @@ const App: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Non-blocking notice: config.json was recovered from its .bak backup */}
+            {showSyncRecoveredNotice && (
+                <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex gap-3 items-center shrink-0">
+                    <span className="text-amber-500">⚠️</span>
+                    <p className="flex-1 text-amber-500/90 text-xs">
+                        Your sync configuration could not be read and was restored from the last local backup. Recent changes from other devices may be missing.
+                    </p>
+                    <button
+                        onClick={() => setShowSyncRecoveredNotice(false)}
+                        className="px-2 py-1 rounded-md text-[10px] font-medium text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 transition-colors shrink-0"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
+
+            {/* Non-blocking notice: the sync folder was written by a newer app
+                version — live-apply is paused (config-sync WP4) until it's back
+                to a compatible schema version. */}
+            {showNewerVersionNotice && (
+                <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex gap-3 items-center shrink-0">
+                    <span className="text-amber-500">⚠️</span>
+                    <p className="flex-1 text-amber-500/90 text-xs">
+                        This sync folder was updated by a newer version of HISSOUNDBOARD on another device. Changes are not applied and syncing is paused — please update the app.
+                    </p>
+                    <button
+                        onClick={() => setShowNewerVersionNotice(false)}
+                        className="px-2 py-1 rounded-md text-[10px] font-medium text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 transition-colors shrink-0"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
 
             {/* Main content area */}
             <div className="flex-1 flex overflow-hidden">

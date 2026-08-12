@@ -11,6 +11,8 @@ import { uIOhook, UiohookKey } from 'uiohook-napi';
 // @ts-ignore
 import squirrelStartup from 'electron-squirrel-startup';
 import { LinuxAudioManager } from './LinuxAudioManager';
+import { configStore } from './configStore';
+import type { PersistedPayload, ApplyFolderAction } from '../shared/sync-types';
 
 const linuxAudio = new LinuxAudioManager();
 
@@ -71,11 +73,9 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow;
 
-// Sounds directory (can be overridden by renderer)
-const defaultSoundsDir = path.join(app.getPath('userData'), 'sounds');
-let customSoundsDir = '';
-
-const getSoundsDir = () => customSoundsDir || defaultSoundsDir;
+// Sounds directory: delegated to configStore, which resolves it from
+// sync-settings.json (<syncRoot>/sounds, or the legacy custom dir).
+const getSoundsDir = () => configStore.getSoundsDir();
 
 const ensureSoundsDir = () => {
     const dir = getSoundsDir();
@@ -112,6 +112,15 @@ const createWindow = () => {
         app.dock?.setIcon(iconPath);
     }
 
+    // One-shot notice: config.json had to be recovered from its .bak backup
+    // during configStore.init(). Sent on 'did-finish-load' (rather than right
+    // after creation) so the renderer's IPC listener is already mounted.
+    mainWindow.webContents.on('did-finish-load', () => {
+        if (configStore.wasCorruptRecovered()) {
+            mainWindow.webContents.send('sync-recovered-from-backup');
+        }
+    });
+
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
     } else {
@@ -123,6 +132,18 @@ const createWindow = () => {
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
+};
+
+// Start watching config.json for changes made outside this app (another
+// device, a sync client) and push them live into the renderer (config-sync
+// WP4). Started once here, after createWindow() so mainWindow exists by the
+// time the debounced watcher callback ever fires; restarted internally by
+// configStore whenever applyFolder() switches the sync root.
+const startConfigWatcher = () => {
+    configStore.startWatcher({
+        onExternalUpdate: (synced) => mainWindow?.webContents.send('state:external-update', synced),
+        onNewerVersion: () => mainWindow?.webContents.send('sync-newer-version'),
+    });
 };
 
 // Build the application menu. We keep the standard roles (so copy/paste,
@@ -491,30 +512,60 @@ const setupIpcHandlers = () => {
     protocol.handle('sound', async (request) => {
         const reqUrl = new URL(request.url);
         const filePath = decodeURIComponent(reqUrl.pathname.replace(/^\/+/, ''));
-        const fullPath = path.join(getSoundsDir(), filePath);
+        const soundsDir = path.resolve(getSoundsDir());
+        const fullPath = path.resolve(soundsDir, filePath);
+        // Reject any path that escapes the sounds directory (e.g. via ../ sequences),
+        // so a crafted sound:// URL can't be used to read arbitrary files on disk.
+        if (fullPath !== soundsDir && !fullPath.startsWith(soundsDir + path.sep)) {
+            return new Response('Forbidden', { status: 403 });
+        }
+        // Config sync can deliver config.json before the referenced sound file has
+        // finished downloading on this machine; treat a missing file as a plain 404
+        // instead of letting the net.fetch() rejection bubble up as an unhandled error.
+        if (!fs.existsSync(fullPath)) {
+            return new Response('Not Found', { status: 404 });
+        }
         const fileUrl = `file://${fullPath}`;
-        const response = await net.fetch(fileUrl);
-        // Chromium (Electron 35+) enforces CORS on fetch() to custom schemes.
-        // The renderer page origin differs from the `sound://` scheme, so without
-        // an explicit ACAO header WaveSurfer's fetch() fails with "Failed to fetch"
-        // (waveform + preview break). Media-element playback is unaffected, which is
-        // why only the editor regressed. Re-emit the response with CORS allowed.
-        const headers = new Headers(response.headers);
-        headers.set('Access-Control-Allow-Origin', '*');
-        return new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers,
-        });
+        try {
+            const response = await net.fetch(fileUrl);
+            // Chromium (Electron 35+) enforces CORS on fetch() to custom schemes.
+            // The renderer page origin differs from the `sound://` scheme, so without
+            // an explicit ACAO header WaveSurfer's fetch() fails with "Failed to fetch"
+            // (waveform + preview break). Media-element playback is unaffected, which is
+            // why only the editor regressed. Re-emit the response with CORS allowed.
+            const headers = new Headers(response.headers);
+            headers.set('Access-Control-Allow-Origin', '*');
+            return new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers,
+            });
+        } catch (e) {
+            console.error('[Main] Failed to fetch sound file:', e);
+            return new Response('Not Found', { status: 404 });
+        }
     });
 
     ipcMain.handle(
         'save-sound-file',
         async (_event, sourcePath: string, fileName: string) => {
             ensureSoundsDir();
-            const destPath = path.join(getSoundsDir(), fileName);
-            if (path.dirname(sourcePath) !== getSoundsDir()) {
+            const soundsDir = getSoundsDir();
+            if (path.dirname(sourcePath) !== soundsDir) {
+                // Avoid clobbering an existing file with the same name: if the
+                // destination is taken, append " (2)", " (3)", etc. until a free
+                // name is found, and copy the source under that name instead.
+                const { name, ext } = path.parse(fileName);
+                let candidateName = fileName;
+                let destPath = path.join(soundsDir, candidateName);
+                let counter = 2;
+                while (fs.existsSync(destPath)) {
+                    candidateName = `${name} (${counter})${ext}`;
+                    destPath = path.join(soundsDir, candidateName);
+                    counter++;
+                }
                 fs.copyFileSync(sourcePath, destPath);
+                return `sound://play/${encodeURIComponent(candidateName)}`;
             }
             return `sound://play/${encodeURIComponent(fileName)}`;
         }
@@ -571,12 +622,31 @@ const setupIpcHandlers = () => {
         return getSoundsDir();
     });
 
-    ipcMain.on('set-sounds-dir', (_event, dir: string) => {
-        customSoundsDir = dir || '';
-        if (customSoundsDir) {
-            ensureSoundsDir();
-        }
+    // ─── Persisted State (config-sync) ───────────────────────────────────
+    // Renderer hydrates synchronously from main on startup (store.ts's
+    // storage adapter), and pushes debounced updates back.
+    ipcMain.on('state:get-initial', (event) => {
+        event.returnValue = configStore.getInitialPersistedPayload();
     });
+
+    ipcMain.on('state:persist', (_event, payload: PersistedPayload) => {
+        configStore.persistFromRenderer(payload);
+    });
+
+    ipcMain.on('sync:set-legacy-sounds-dir', (_event, dir: string) => {
+        configStore.setLegacySoundsDir(dir);
+    });
+
+    // ─── Folder selection (config-sync WP2) ───────────────────────────────
+    ipcMain.handle('sync:get-status', () => configStore.getStatus());
+
+    ipcMain.handle('sync:pick-folder', () => configStore.pickFolder(mainWindow!));
+
+    ipcMain.handle('sync:apply-folder', (_event, folder: string, action: ApplyFolderAction) =>
+        configStore.applyFolder(folder, action)
+    );
+
+    ipcMain.handle('sync:open-folder', () => shell.openPath(configStore.getSyncRoot()));
 
     // Expose the host platform to the renderer so audio routing can adapt.
     ipcMain.handle('get-platform', () => process.platform);
@@ -676,9 +746,15 @@ app.on('ready', () => {
         }
     });
 
+    // Load sync-settings.json / config.json / local-settings.json before the
+    // window is created, so getSoundsDir() and initial hydration are correct
+    // from the very first frame.
+    configStore.init();
+
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
+    startConfigWatcher();
     buildAppMenu();
     setupGlobalHooks();
 
@@ -702,6 +778,11 @@ app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+});
+
+app.on('before-quit', () => {
+    configStore.flushSync();
+    configStore.stopWatcher();
 });
 
 app.on('will-quit', (event) => {

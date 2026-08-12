@@ -1,3 +1,12 @@
+import type {
+    PersistedPayload,
+    FolderPickResult,
+    ApplyFolderAction,
+    ApplyFolderResult,
+    SyncStatus,
+    SyncedConfig,
+} from '../../../shared/sync-types';
+
 export interface TriggerSoundPayload {
     page?: number;
     pageId?: string;
@@ -26,6 +35,11 @@ interface ElectronApi {
 
     // Warnings
     onWaylandWarning?: (callback: () => void) => () => void;
+    onSyncRecoveredFromBackup?: (callback: () => void) => () => void;
+
+    // Live external updates (config-sync WP4)
+    onExternalStateUpdate?: (callback: (synced: SyncedConfig) => void) => () => void;
+    onSyncNewerVersion?: (callback: () => void) => () => void;
 
     // Help menu
     onShowHelp?: (callback: () => void) => () => void;
@@ -36,7 +50,18 @@ interface ElectronApi {
     downloadUrl: (url: string) => Promise<string>;
     getPathForFile: (file: File) => string;
     getSoundsDir: () => Promise<string>;
-    setSoundsDir: (dir: string) => void;
+
+    // Persisted State (config-sync)
+    getInitialPersistedState: () => PersistedPayload | null;
+    persistState: (payload: PersistedPayload) => void;
+    setLegacySoundsDir: (dir: string) => void;
+
+    // Sync folder selection (config-sync WP2)
+    getSyncStatus: () => Promise<SyncStatus>;
+    pickSyncFolder: () => Promise<FolderPickResult>;
+    applySyncFolder: (folder: string, action: ApplyFolderAction) => Promise<ApplyFolderResult>;
+    openSyncFolder: () => Promise<string>;
+
     setShortcutConfig: (config: ShortcutConfig) => void;
     setRemotePin: (pin: string) => void;
     sendSoundsForRemote: (sounds: unknown) => void;
