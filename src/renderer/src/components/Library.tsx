@@ -17,7 +17,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const removeFromLibrary = useSoundboardStore((s) => s.removeFromLibrary);
     const addToLibrary = useSoundboardStore((s) => s.addToLibrary);
-    const unassignSlot = useSoundboardStore((s) => s.unassignSlot);
+    const pages = useSoundboardStore((s) => s.pages);
     const getUsedSoundIds = useSoundboardStore((s) => s.getUsedSoundIds);
     const activeVoiceEffect = useSoundboardStore((s) => s.activeVoiceEffect);
     const toggleVoiceEffect = useSoundboardStore((s) => s.toggleVoiceEffect);
@@ -41,15 +41,21 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
     const usedIds = useMemo(() => getUsedSoundIds(), [grid, getUsedSoundIds]);
 
     const getSoundUsage = useCallback((soundId: string) => {
-        const usage: { page: number; slot: number }[] = [];
+        // Grid keys are `${pageId}-${slot}` where pageId is a UUID (which itself
+        // contains dashes), so the slot is everything after the LAST dash.
+        const usage: { pageIndex: number; slot: number }[] = [];
         for (const [key, id] of Object.entries(grid)) {
-            if (id === soundId) {
-                const [p, s] = key.split('-');
-                usage.push({ page: parseInt(p), slot: parseInt(s) });
-            }
+            if (id !== soundId) continue;
+            const lastDash = key.lastIndexOf('-');
+            const pageId = key.slice(0, lastDash);
+            const slot = parseInt(key.slice(lastDash + 1), 10);
+            const pageIndex = pages.findIndex((p) => p.id === pageId);
+            // Skip slots of pages that no longer exist — they aren't visible anywhere.
+            if (pageIndex === -1) continue;
+            usage.push({ pageIndex, slot });
         }
-        return usage.sort((a, b) => a.page - b.page || a.slot - b.slot);
-    }, [grid]);
+        return usage.sort((a, b) => a.pageIndex - b.pageIndex || a.slot - b.slot);
+    }, [grid, pages]);
 
     const filteredSounds = useMemo(() => {
         let sounds = Object.values(library);
@@ -79,13 +85,10 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
 
     const handleConfirmDelete = useCallback(() => {
         if (!deleteTarget) return;
-        const usage = getSoundUsage(deleteTarget);
-        for (const { page, slot } of usage) {
-            unassignSlot(page, slot);
-        }
+        // removeFromLibrary also clears every grid slot referencing the sound.
         removeFromLibrary(deleteTarget);
         setDeleteTarget(null);
-    }, [deleteTarget, getSoundUsage, unassignSlot, removeFromLibrary]);
+    }, [deleteTarget, removeFromLibrary]);
 
     const handleDownload = useCallback(async () => {
         if (!downloadUrl.trim()) return;
@@ -349,7 +352,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                     warnings={
                         deleteUsage.length > 0
                             ? deleteUsage.map(
-                                (u) => `Dieser Sound wird benutzt auf Seite ${u.page + 1}, Slot ${u.slot + 1}`
+                                (u) => `Dieser Sound wird benutzt auf Seite ${u.pageIndex + 1}, Slot ${u.slot + 1}`
                             )
                             : undefined
                     }

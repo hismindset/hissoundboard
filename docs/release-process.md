@@ -16,13 +16,22 @@ Release tags must use the `vX.Y.Z` format, for example `v1.0.1` or `v1.1.0-beta.
 ## Normal release flow
 
 1. Develop on a branch and open a pull request into `main`.
-2. Wait for `CI` to be green.
+   - **Release summary:** The PR template (`.github/pull_request_template.md`) pre-fills a `## Release Summary` section. You must fill this with a non-empty, user-facing summary of the changes (e.g., "Added global hotkey customization and fixed audio routing on Linux"). CI enforces this — the PR will not merge without it.
+   - **Breaking changes:** If you add the `release:major` label, you must also fill a `## Breaking Changes` section in the PR description, listing any incompatible changes users should know about.
+   - **Renovate PRs:** Dependency update PRs (from Renovate) automatically get the summary "Security & Version Patches"; manual entry is not required.
+
+2. Wait for `CI` to be green. CI checks that Release Summary is non-empty (unless it's a Renovate PR) and Breaking Changes exists for `release:major` PRs.
+
 3. Choose the version bump with exactly one PR label:
    - `release:patch`
    - `release:minor`
    - `release:major`
+
 4. Merge the PR.
+
 5. GitHub Actions runs `Auto Version and Release`, bumps `package.json` and `package-lock.json`, creates the matching `vX.Y.Z` tag, builds all installers, and publishes a GitHub Release.
+   - The Release Summary (and Breaking Changes section, if present) is extracted from the PR description and placed at the top of the GitHub release body as `## Summary` and `## ⚠️ Breaking Changes`, followed by auto-generated release notes.
+   - The desktop app parses these sections on startup when checking for updates and displays the Summary in the update dialog; Breaking Changes is highlighted with a warning for major version jumps.
 
 Renovate PRs are automatically treated as `release:patch`, so dependency maintenance does not need a manual version choice.
 
@@ -36,7 +45,10 @@ If a release job fails because a hosted runner or dependency download had a bad 
 
 Use `draft: true` when you want to inspect the uploaded files before users see the release.
 
-If you need a release without a PR, open GitHub Actions, choose `Auto Version and Release`, and run it manually with `patch`, `minor`, or `major`.
+If you need a release without a PR, open GitHub Actions, choose `Auto Version and Release`, and run it manually with the following inputs:
+- `bump`: `patch`, `minor`, or `major` (required)
+- `summary`: A user-facing summary of the changes (required; appears at the top of the GitHub release and in the desktop app's update dialog)
+- `breaking`: Optional; if provided, a description of breaking changes (displayed with a warning for major version bumps)
 
 ## GitHub prerequisites
 

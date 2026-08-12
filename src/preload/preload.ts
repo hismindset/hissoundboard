@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron';
 import type { PersistedPayload, FolderPickResult, ApplyFolderAction, ApplyFolderResult, SyncStatus, SyncedConfig } from '../shared/sync-types';
+import { UPDATER_CHANNELS } from '../shared/updater-types';
+import type { UpdateOffer, UpdateProgress, UpdateError, UpToDateInfo } from '../shared/updater-types';
 
 export interface TriggerSoundPayload {
     page?: number; // Legacy index support
@@ -188,6 +190,62 @@ const api = {
 
     /** Log message to main process console */
     log: (message: string) => ipcRenderer.send('log', message),
+
+    // ─── Auto-Updater ────────────────────────────────────────────────────────
+
+    updater: {
+        /** Manually trigger an update check (ignores skip/postpone state). */
+        checkManual: (): Promise<void> =>
+            ipcRenderer.invoke(UPDATER_CHANNELS.checkManual),
+
+        /** Install the currently offered update (Windows/Linux only; no-op on macOS). */
+        install: (): Promise<void> =>
+            ipcRenderer.invoke(UPDATER_CHANNELS.install),
+
+        /** Postpone the currently offered update until tomorrow (at least 24h later). */
+        postpone: (): Promise<void> =>
+            ipcRenderer.invoke(UPDATER_CHANNELS.postpone),
+
+        /** Skip a specific version of the update permanently. */
+        skip: (version: string): Promise<void> =>
+            ipcRenderer.invoke(UPDATER_CHANNELS.skip, version),
+
+        /** Open the release page of the currently offered update in the browser. */
+        openDownloadPage: (): Promise<void> =>
+            ipcRenderer.invoke(UPDATER_CHANNELS.openDownloadPage),
+
+        /** Get the current app version. */
+        getCurrentVersion: (): Promise<string> =>
+            ipcRenderer.invoke(UPDATER_CHANNELS.getCurrentVersion),
+
+        /** Subscribe to update availability notifications. */
+        onUpdateAvailable: (cb: (offer: UpdateOffer) => void) => {
+            const handler = (_event: IpcRendererEvent, offer: UpdateOffer) => cb(offer);
+            ipcRenderer.on(UPDATER_CHANNELS.updateAvailable, handler);
+            return () => ipcRenderer.removeListener(UPDATER_CHANNELS.updateAvailable, handler);
+        },
+
+        /** Subscribe to download progress updates. */
+        onDownloadProgress: (cb: (p: UpdateProgress) => void) => {
+            const handler = (_event: IpcRendererEvent, p: UpdateProgress) => cb(p);
+            ipcRenderer.on(UPDATER_CHANNELS.downloadProgress, handler);
+            return () => ipcRenderer.removeListener(UPDATER_CHANNELS.downloadProgress, handler);
+        },
+
+        /** Subscribe to update-related errors. */
+        onError: (cb: (e: UpdateError) => void) => {
+            const handler = (_event: IpcRendererEvent, e: UpdateError) => cb(e);
+            ipcRenderer.on(UPDATER_CHANNELS.error, handler);
+            return () => ipcRenderer.removeListener(UPDATER_CHANNELS.error, handler);
+        },
+
+        /** Subscribe to notifications when the app is already up to date. */
+        onUpToDate: (cb: (v: UpToDateInfo) => void) => {
+            const handler = (_event: IpcRendererEvent, v: UpToDateInfo) => cb(v);
+            ipcRenderer.on(UPDATER_CHANNELS.upToDate, handler);
+            return () => ipcRenderer.removeListener(UPDATER_CHANNELS.upToDate, handler);
+        },
+    },
 };
 
 contextBridge.exposeInMainWorld('api', api);

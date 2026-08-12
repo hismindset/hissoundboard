@@ -12,6 +12,7 @@ import { uIOhook, UiohookKey } from 'uiohook-napi';
 import squirrelStartup from 'electron-squirrel-startup';
 import { LinuxAudioManager } from './LinuxAudioManager';
 import { configStore } from './configStore';
+import { initUpdater } from './updater';
 import type { PersistedPayload, ApplyFolderAction } from '../shared/sync-types';
 
 const linuxAudio = new LinuxAudioManager();
@@ -754,6 +755,7 @@ app.on('ready', () => {
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
+    initUpdater(() => mainWindow);
     startConfigWatcher();
     buildAppMenu();
     setupGlobalHooks();
