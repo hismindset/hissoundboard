@@ -152,10 +152,11 @@ const App: React.FC = () => {
         }
     }, [shortcutMode, pages]);
 
-    // Keep the remote-control PIN in sync with the local web server.
+    // Keep the synced remote-control PIN in sync with the local web server.
+    // Starting and stopping remains an explicit Settings action.
     const remotePin = useSoundboardStore((s) => s.remotePin);
     useEffect(() => {
-        window.api?.setRemotePin?.(remotePin || '');
+        void window.api?.configureRemoteServer?.(remotePin || '');
     }, [remotePin]);
 
     // Handle IPC events
@@ -352,7 +353,7 @@ const App: React.FC = () => {
             <div className="flex-1 flex overflow-hidden">
                 {view === 'grid' && <PageList />}
 
-                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4 px-6 overflow-auto'}`}>
+                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4 px-6 pb-6 overflow-auto'}`}>
                     {view === 'grid' ? (
                         <>
                             <Grid onEditSound={handleEditSound} onEditEffect={handleEditEffect} />

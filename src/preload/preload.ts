@@ -109,8 +109,8 @@ const api = {
     getLocalIp: (): Promise<{ ip: string; port: number }> =>
         ipcRenderer.invoke('get-local-ip'),
 
-    /** Download an MP3 from a URL into the sounds directory */
-    downloadUrl: (url: string): Promise<string> =>
+    /** Download an audio file or Myinstants page into the sounds directory. */
+    downloadUrl: (url: string): Promise<{ filePath: string; originalName: string }> =>
         ipcRenderer.invoke('download-url', url),
 
     /** Get the native file path from a dropped File object */
@@ -172,8 +172,19 @@ const api = {
         ipcRenderer.send('set-shortcut-config', config);
     },
 
-    /** Set (or clear, with '') the optional remote-control PIN */
-    setRemotePin: (pin: string) => ipcRenderer.send('set-remote-pin', pin),
+    /** Read the runtime state of the opt-in remote web server. */
+    getRemoteServerStatus: (): Promise<{ running: boolean; pinConfigured: boolean }> =>
+        ipcRenderer.invoke('remote-server:get-status'),
+
+    /** Set the mandatory remote-control PIN. A configured PIN cannot be removed. */
+    configureRemoteServer: (pin: string): Promise<{ ok: boolean; error?: string }> =>
+        ipcRenderer.invoke('remote-server:configure', pin),
+
+    /** Start or stop the local remote-control web server. */
+    startRemoteServer: (): Promise<{ ok: boolean; error?: string }> =>
+        ipcRenderer.invoke('remote-server:start'),
+    stopRemoteServer: (): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke('remote-server:stop'),
 
     /** Start listening for keys to record */
     startRecordingKeys: () => ipcRenderer.send('start-recording-keys'),

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import type { Sound } from '../types/sound';
 import { formatSoundName, generateId } from '../lib/utils';
@@ -37,6 +37,12 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
     const [downloadUrl, setDownloadUrl] = useState('');
     const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
     const [downloadMessage, setDownloadMessage] = useState('');
+
+    // Library previews are intentionally separate from the audio controller:
+    // they only play locally, never appear as an active board sound, and are
+    // stopped as soon as another preview is chosen or the panel closes.
+    const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+    const [previewSoundId, setPreviewSoundId] = useState<string | null>(null);
 
     const usedIds = useMemo(() => getUsedSoundIds(), [grid, getUsedSoundIds]);
 
@@ -90,16 +96,63 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
         setDeleteTarget(null);
     }, [deleteTarget, removeFromLibrary]);
 
+    const stopPreview = useCallback(() => {
+        const audio = previewAudioRef.current;
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+            previewAudioRef.current = null;
+        }
+        setPreviewSoundId(null);
+    }, []);
+
+    const handlePreview = useCallback((sound: Sound) => {
+        if (previewSoundId === sound.id) {
+            stopPreview();
+            return;
+        }
+
+        stopPreview();
+        const audio = new Audio(sound.filePath);
+        audio.volume = Math.min(Math.max(sound.volume, 0), 1);
+        audio.currentTime = sound.trimStart;
+        audio.onended = () => {
+            if (previewAudioRef.current === audio) {
+                previewAudioRef.current = null;
+                setPreviewSoundId(null);
+            }
+        };
+        audio.ontimeupdate = () => {
+            if (sound.trimEnd > sound.trimStart && audio.currentTime >= sound.trimEnd) {
+                audio.pause();
+                audio.currentTime = sound.trimStart;
+                if (previewAudioRef.current === audio) {
+                    previewAudioRef.current = null;
+                    setPreviewSoundId(null);
+                }
+            }
+        };
+        previewAudioRef.current = audio;
+        setPreviewSoundId(sound.id);
+        audio.play().catch((err) => {
+            console.warn('Library preview could not be played:', err);
+            if (previewAudioRef.current === audio) stopPreview();
+        });
+    }, [previewSoundId, stopPreview]);
+
+    useEffect(() => stopPreview, [stopPreview]);
+
+    useEffect(() => {
+        if (!libraryOpen) stopPreview();
+    }, [libraryOpen, stopPreview]);
+
     const handleDownload = useCallback(async () => {
         if (!downloadUrl.trim()) return;
         setDownloadStatus('downloading');
         setDownloadMessage('');
         try {
-            const soundUrl = await window.api.downloadUrl(downloadUrl.trim());
-
-            const urlObj = new URL(downloadUrl.trim());
-            const pathParts = urlObj.pathname.split('/');
-            const rawName = pathParts[pathParts.length - 1] || 'Downloaded Sound';
+            const downloaded = await window.api.downloadUrl(downloadUrl.trim());
+            const rawName = downloaded.originalName;
             const displayName = formatSoundName(decodeURIComponent(rawName));
 
             const id = generateId();
@@ -107,7 +160,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                 id,
                 originalName: rawName,
                 displayName,
-                filePath: soundUrl,
+                filePath: downloaded.filePath,
                 volume: 1.0,
                 trimStart: 0,
                 trimEnd: 0,
@@ -125,7 +178,7 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
         } catch (err) {
             console.error('Download failed:', err);
             setDownloadStatus('error');
-            setDownloadMessage('Download fehlgeschlagen');
+            setDownloadMessage(err instanceof Error ? err.message : 'Download fehlgeschlagen');
             setTimeout(() => { setDownloadStatus('idle'); setDownloadMessage(''); }, 3000);
         }
     }, [downloadUrl, addToLibrary]);
@@ -156,14 +209,14 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                     </button>
                 </div>
 
-                {/* Download URL */}
+                {/* Download URL / Myinstants */}
                 <div className="px-3 py-2 border-b border-surface-700/30">
                     <div className="flex gap-1.5">
                         <input
                             type="text"
                             value={downloadUrl}
                             onChange={(e) => setDownloadUrl(e.target.value)}
-                            placeholder="MP3-URL eingeben..."
+                            placeholder="Audio- oder Myinstants-Link..."
                             onKeyDown={(e) => e.key === 'Enter' && handleDownload()}
                             className="flex-1 px-2.5 py-1.5 bg-surface-800 border border-surface-600/40 rounded-lg text-xs text-white/90 placeholder:text-surface-500 focus:outline-none focus:border-accent/50 transition-colors"
                         />
@@ -318,6 +371,25 @@ const Library: React.FC<LibraryProps> = ({ onEditSound, onEditEffect }) => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handlePreview(sound); }}
+                                            className={`p-1 rounded-lg transition-colors ${previewSoundId === sound.id
+                                                ? 'text-neon-green bg-neon-green/10'
+                                                : 'text-surface-400 hover:text-neon-green hover:bg-surface-700'
+                                                }`}
+                                            title={previewSoundId === sound.id ? 'Vorschau stoppen' : 'Vorschau abspielen'}
+                                        >
+                                            {previewSoundId === sound.id ? (
+                                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                                    <rect x="6" y="5" width="4" height="14" rx="1" />
+                                                    <rect x="14" y="5" width="4" height="14" rx="1" />
+                                                </svg>
+                                            ) : (
+                                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M8 5.14v13.72a1 1 0 0 0 1.51.86l10.67-6.86a1 1 0 0 0 0-1.72L9.51 4.28A1 1 0 0 0 8 5.14Z" />
+                                                </svg>
+                                            )}
+                                        </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onEditSound(sound.id); }}
                                             className="p-1 rounded-lg text-surface-400 hover:text-accent-light hover:bg-surface-700 transition-colors"

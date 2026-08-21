@@ -69,7 +69,7 @@ interface ElectronApi {
 
     saveSoundFile: (sourcePath: string, fileName: string) => Promise<string>;
     getLocalIp: () => Promise<{ ip: string; port: number }>;
-    downloadUrl: (url: string) => Promise<string>;
+    downloadUrl: (url: string) => Promise<{ filePath: string; originalName: string }>;
     getPathForFile: (file: File) => string;
     getSoundsDir: () => Promise<string>;
 
@@ -85,7 +85,10 @@ interface ElectronApi {
     openSyncFolder: () => Promise<string>;
 
     setShortcutConfig: (config: ShortcutConfig) => void;
-    setRemotePin: (pin: string) => void;
+    getRemoteServerStatus: () => Promise<{ running: boolean; pinConfigured: boolean }>;
+    configureRemoteServer: (pin: string) => Promise<{ ok: boolean; error?: string }>;
+    startRemoteServer: () => Promise<{ ok: boolean; error?: string }>;
+    stopRemoteServer: () => Promise<{ ok: boolean }>;
     sendSoundsForRemote: (sounds: unknown) => void;
     createVirtualSink: () => Promise<{ success: boolean; error?: string }>;
     setLinuxMicLoopback: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;

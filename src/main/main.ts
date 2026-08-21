@@ -6,7 +6,6 @@ import express from 'express';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import os from 'os';
-import https from 'https';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 // @ts-ignore
 import squirrelStartup from 'electron-squirrel-startup';
@@ -83,6 +82,40 @@ const ensureSoundsDir = () => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
+};
+
+type DownloadedSound = {
+    filePath: string;
+    originalName: string;
+};
+
+const AUDIO_FILE_EXTENSION = /\.(?:mp3|m4a|wav|ogg|aac|flac)$/i;
+
+/** Myinstants links point to a sound-page, while the downloadable asset lives
+ *  below /media/sounds/. Resolve the page in the trusted main process so the
+ *  renderer never has to scrape a cross-origin site. */
+const resolveDownloadUrl = async (input: string): Promise<URL> => {
+    let url: URL;
+    try {
+        url = new URL(input);
+    } catch {
+        throw new Error('Enter a valid HTTP(S) URL.');
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new Error('Only HTTP(S) URLs can be downloaded.');
+    }
+
+    const isMyinstants = /(^|\.)myinstants\.com$/i.test(url.hostname);
+    if (!isMyinstants || url.pathname.startsWith('/media/sounds/')) return url;
+
+    const page = await net.fetch(url.toString(), { redirect: 'follow' });
+    if (!page.ok) throw new Error(`Myinstants page could not be loaded (${page.status}).`);
+
+    const html = await page.text();
+    const audioMatch = html.match(/(?:href|src)=["']([^"']*\/media\/sounds\/[^"']+\.(?:mp3|m4a|wav|ogg|aac|flac)(?:\?[^"']*)?)["']/i);
+    if (!audioMatch) throw new Error('No downloadable audio file was found on this Myinstants page.');
+
+    return new URL(audioMatch[1].replace(/&amp;/g, '&'), page.url);
 };
 
 // ─── Window Creation ─────────────────────────────────────────────────────────
@@ -200,12 +233,61 @@ const getRemotePath = () => {
 
 appServer.use(express.static(getRemotePath()));
 
-// Optional remote PIN. '' = disabled (anyone on the LAN may control, original
-// behaviour). When set, clients must authenticate before they can list or
-// trigger sounds. Kept in sync from the renderer via the 'set-remote-pin' IPC.
+// The remote is deliberately opt-in and always PIN protected. The renderer
+// keeps this value in the synced config; this process only holds the active
+// value required to authenticate HTTP and WebSocket clients.
 let remotePin = '';
+let remoteServerRunning = false;
 
-const isAuthed = (ws: WebSocket) => !remotePin || (ws as any).hsbAuthed === true;
+const hasValidRemotePin = () => remotePin.length >= 4;
+
+const getRemoteServerStatus = () => ({
+    running: remoteServerRunning,
+    pinConfigured: hasValidRemotePin(),
+});
+
+const startRemoteServer = (): Promise<{ ok: boolean; error?: string }> => {
+    if (remoteServerRunning) return Promise.resolve({ ok: true });
+    if (!hasValidRemotePin()) {
+        return Promise.resolve({ ok: false, error: 'Set a PIN with at least 4 characters before starting the web server.' });
+    }
+
+    return new Promise((resolve) => {
+        const handleError = (error: Error) => {
+            server.off('listening', handleListening);
+            remoteServerRunning = false;
+            console.error('[Remote] Failed to start server:', error);
+            resolve({ ok: false, error: error.message });
+        };
+        const handleListening = () => {
+            server.off('error', handleError);
+            remoteServerRunning = true;
+            console.log(`Remote control server running on http://${getLocalIp()}:${SERVER_PORT}`);
+            resolve({ ok: true });
+        };
+
+        server.once('error', handleError);
+        server.once('listening', handleListening);
+        server.listen(SERVER_PORT, '0.0.0.0');
+    });
+};
+
+const stopRemoteServer = (): Promise<void> => {
+    if (!remoteServerRunning) return Promise.resolve();
+
+    // Close live connections first, otherwise http.Server#close waits for the
+    // remote browser to disconnect before the settings change takes effect.
+    wss.clients.forEach((client) => client.terminate());
+    remoteServerRunning = false;
+    return new Promise((resolve) => {
+        server.close(() => {
+            console.log('[Remote] Web server stopped.');
+            resolve();
+        });
+    });
+};
+
+const isAuthed = (ws: WebSocket) => (ws as any).hsbAuthed === true;
 
 const broadcast = (data: object) => {
     const message = JSON.stringify(data);
@@ -218,13 +300,9 @@ const broadcast = (data: object) => {
 };
 
 wss.on('connection', (ws: WebSocket) => {
-    (ws as any).hsbAuthed = !remotePin;
-    if (remotePin) {
-        // Tell the remote to ask the user for the PIN.
-        ws.send(JSON.stringify({ type: 'auth-required' }));
-    } else {
-        mainWindow?.webContents.send('request-sounds-for-remote');
-    }
+    (ws as any).hsbAuthed = false;
+    // The remote always asks for the PIN before it can see the board.
+    ws.send(JSON.stringify({ type: 'auth-required' }));
 
     ws.on('message', (message) => {
         try {
@@ -265,11 +343,10 @@ wss.on('connection', (ws: WebSocket) => {
     });
 });
 
-// Guard the HTTP control endpoints with the same optional PIN. External tools
-// (Stream Deck, Wayland shortcuts) pass it as ?pin=… when one is configured.
+// Guard the HTTP control endpoints with the mandatory PIN. External tools
+// (Stream Deck, Wayland shortcuts) pass it as ?pin=….
 const httpPinOk = (req: express.Request, res: express.Response): boolean => {
-    if (!remotePin) return true;
-    if (req.query.pin === remotePin) return true;
+    if (hasValidRemotePin() && req.query.pin === remotePin) return true;
     res.status(401).json({ ok: false, error: 'PIN required' });
     return false;
 };
@@ -576,42 +653,29 @@ const setupIpcHandlers = () => {
         return { ip: getLocalIp(), port: SERVER_PORT };
     });
 
-    ipcMain.handle('download-url', async (_event, url: string) => {
+    ipcMain.handle('download-url', async (_event, url: string): Promise<DownloadedSound> => {
         ensureSoundsDir();
-        return new Promise<string>((resolve, reject) => {
-            const fileName = `download_${Date.now()}.mp3`;
-            const destPath = path.join(getSoundsDir(), fileName);
-            const file = fs.createWriteStream(destPath);
-            const httpProto = url.startsWith('https') ? https : http;
+        const sourceUrl = await resolveDownloadUrl(url);
+        const response = await net.fetch(sourceUrl.toString(), { redirect: 'follow' });
+        if (!response.ok) throw new Error(`Download failed (${response.status}).`);
 
-            const request = httpProto.get(url, (response) => {
-                if (
-                    response.statusCode &&
-                    response.statusCode >= 300 &&
-                    response.statusCode < 400 &&
-                    response.headers.location
-                ) {
-                    httpProto.get(response.headers.location, (redirectResponse) => {
-                        redirectResponse.pipe(file);
-                        file.on('finish', () => {
-                            file.close();
-                            resolve(`sound://play/${encodeURIComponent(fileName)}`);
-                        });
-                    });
-                    return;
-                }
-                response.pipe(file);
-                file.on('finish', () => {
-                    file.close();
-                    resolve(`sound://play/${encodeURIComponent(fileName)}`);
-                });
-            });
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!contentType.startsWith('audio/') && !AUDIO_FILE_EXTENSION.test(sourceUrl.pathname)) {
+            throw new Error('The URL did not return an audio file.');
+        }
 
-            request.on('error', (err) => {
-                fs.unlink(destPath, () => { });
-                reject(err.message);
-            });
-        });
+        const audioData = Buffer.from(await response.arrayBuffer());
+        if (audioData.length === 0) throw new Error('The downloaded audio file is empty.');
+
+        const originalName = path.basename(decodeURIComponent(sourceUrl.pathname)) || 'Downloaded Sound.mp3';
+        const extension = path.extname(originalName) || '.mp3';
+        const fileName = `download_${Date.now()}${extension}`;
+        fs.writeFileSync(path.join(getSoundsDir(), fileName), audioData);
+
+        return {
+            filePath: `sound://play/${encodeURIComponent(fileName)}`,
+            originalName,
+        };
     });
 
     ipcMain.on('sounds-for-remote', (_event, sounds) => {
@@ -694,17 +758,35 @@ const setupIpcHandlers = () => {
         }
     });
 
-    ipcMain.on('set-remote-pin', (_event, pin: string) => {
-        remotePin = typeof pin === 'string' ? pin.trim() : '';
-        console.log(`[Remote] PIN ${remotePin ? 'enabled' : 'disabled'}`);
-        // Drop the auth state of connected clients so the new policy takes
-        // effect immediately (they'll be re-prompted if a PIN is now required).
+    ipcMain.handle('remote-server:get-status', () => getRemoteServerStatus());
+
+    ipcMain.handle('remote-server:configure', (_event, pin: string) => {
+        const nextPin = typeof pin === 'string' ? pin.trim() : '';
+        // A PIN can be changed, but never removed. This also rejects short
+        // values so a malformed synced config cannot weaken the server.
+        if (nextPin && nextPin.length < 4) {
+            return { ok: false, error: 'The PIN must contain at least 4 characters.' };
+        }
+        if (!nextPin && remotePin) {
+            return { ok: false, error: 'The PIN cannot be removed once it has been set.' };
+        }
+        remotePin = nextPin;
+        console.log(`[Remote] PIN ${remotePin ? 'configured' : 'not configured'}`);
+        // Drop the auth state of connected clients so a changed PIN takes
+        // effect immediately.
         wss.clients.forEach((client) => {
-            (client as any).hsbAuthed = !remotePin;
-            if (remotePin && client.readyState === WebSocket.OPEN) {
+            (client as any).hsbAuthed = false;
+            if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ type: 'auth-required' }));
             }
         });
+        return { ok: true };
+    });
+
+    ipcMain.handle('remote-server:start', () => startRemoteServer());
+    ipcMain.handle('remote-server:stop', async () => {
+        await stopRemoteServer();
+        return { ok: true };
     });
 
     // Key Recording IPC
@@ -752,6 +834,12 @@ app.on('ready', () => {
     // from the very first frame.
     configStore.init();
 
+    // The server remains off unless the synced startup preference explicitly
+    // requests it and its mandatory PIN is valid. It starts before the window
+    // has finished rendering, so the remote is ready as soon as the app is.
+    const initialRemoteSettings = configStore.getInitialPersistedPayload()?.state;
+    remotePin = initialRemoteSettings?.remotePin?.trim() ?? '';
+
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
@@ -763,14 +851,14 @@ app.on('ready', () => {
     // Linux Specific Startup: create virtual sink + loop the mic into it (OS-level mixing)
     linuxAudio.ensureAudioSink();
 
-    server.listen(SERVER_PORT, '0.0.0.0', () => {
-        console.log(`Remote control server running on http://${getLocalIp()}:${SERVER_PORT}`);
-    });
+    if (initialRemoteSettings?.webServerAutoStart && hasValidRemotePin()) {
+        void startRemoteServer();
+    }
 });
 
 app.on('window-all-closed', () => {
     uIOhook.stop();
-    server.close();
+    void stopRemoteServer();
     if (process.platform !== 'darwin') {
         app.quit();
     }

@@ -26,12 +26,19 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const setShortcutMode = useSoundboardStore((s) => s.setShortcutMode);
     const remotePin = useSoundboardStore((s) => s.remotePin);
     const setRemotePin = useSoundboardStore((s) => s.setRemotePin);
+    const webServerAutoStart = useSoundboardStore((s) => s.webServerAutoStart);
+    const setWebServerAutoStart = useSoundboardStore((s) => s.setWebServerAutoStart);
 
     const showWaylandWarning = useSoundboardStore((s) => s.showWaylandWarning);
     const setShowWaylandWarning = useSoundboardStore((s) => s.setShowWaylandWarning);
 
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [serverUrl, setServerUrl] = useState<string>('');
+    const [webServerRunning, setWebServerRunning] = useState(false);
+    const [serverStatusError, setServerStatusError] = useState<string | null>(null);
+    const [showPinDialog, setShowPinDialog] = useState(false);
+    const [pinDraft, setPinDraft] = useState('');
+    const [pinDialogError, setPinDialogError] = useState<string | null>(null);
 
     // Load audio output devices AND Input devices
     useEffect(() => {
@@ -113,6 +120,65 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 .catch((err) => console.error('QR generation failed:', err));
         });
     }, []);
+
+    useEffect(() => {
+        window.api.getRemoteServerStatus?.()
+            .then(({ running }) => setWebServerRunning(running))
+            .catch(() => setServerStatusError('Could not read the web server status.'));
+    }, []);
+
+    const generatePin = () => {
+        setPinDraft(String(Math.floor(1000 + Math.random() * 9000)));
+        setPinDialogError(null);
+    };
+
+    const savePinAndStartServer = async () => {
+        const pin = pinDraft.trim();
+        if (pin.length < 4) {
+            setPinDialogError('Use at least 4 characters for the PIN.');
+            return;
+        }
+        const configured = await window.api.configureRemoteServer(pin);
+        if (!configured.ok) {
+            setPinDialogError(configured.error ?? 'Could not save the PIN.');
+            return;
+        }
+        setRemotePin(pin);
+        const result = await window.api.startRemoteServer();
+        if (!result.ok) {
+            setPinDialogError(result.error ?? 'Could not start the web server.');
+            return;
+        }
+        setWebServerRunning(true);
+        setServerStatusError(null);
+        setShowPinDialog(false);
+    };
+
+    const toggleWebServer = async () => {
+        setServerStatusError(null);
+        if (webServerRunning) {
+            await window.api.stopRemoteServer();
+            setWebServerRunning(false);
+            return;
+        }
+        if (remotePin.length < 4) {
+            setPinDraft('');
+            setPinDialogError(null);
+            setShowPinDialog(true);
+            return;
+        }
+        const configured = await window.api.configureRemoteServer(remotePin);
+        if (!configured.ok) {
+            setServerStatusError(configured.error ?? 'Could not configure the web server.');
+            return;
+        }
+        const result = await window.api.startRemoteServer();
+        if (!result.ok) {
+            setServerStatusError(result.error ?? 'Could not start the web server.');
+            return;
+        }
+        setWebServerRunning(true);
+    };
 
     return (
         <div className="w-full max-w-md space-y-6 animate-fade-in">
@@ -367,47 +433,90 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <h3 className="text-sm font-medium text-accent-light uppercase tracking-wider">
                     Remote Control
                 </h3>
-                <div className="flex items-start gap-4 p-4 bg-surface-800/60 rounded-xl border border-surface-600/30">
-                    {qrCodeUrl && (
-                        <img
-                            src={qrCodeUrl}
-                            alt="QR Code"
-                            className="w-28 h-28 rounded-lg"
-                        />
-                    )}
-                    <div className="flex flex-col gap-2">
-                        <p className="text-xs text-surface-300">
-                            Scan to connect:
-                        </p>
-                        <a
-                            href={serverUrl}
-                            className="text-sm text-accent-light hover:text-accent font-mono break-all transition-colors"
+                <div className="p-4 bg-surface-800/60 rounded-xl border border-surface-600/30 space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-medium text-surface-100">Local web server</p>
+                            <p className="text-[11px] text-surface-400 mt-1">
+                                {webServerRunning ? 'Running and protected by your PIN.' : 'Off by default. Turn it on only when you need remote control.'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={webServerRunning}
+                            onClick={() => void toggleWebServer()}
+                            className={`relative w-11 h-6 rounded-full transition-colors ${webServerRunning ? 'bg-accent' : 'bg-surface-600'}`}
+                            title={webServerRunning ? 'Stop web server' : 'Start web server'}
                         >
-                            {serverUrl}
-                        </a>
+                            <span className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform ${webServerRunning ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
                     </div>
+
+                    <label className={`flex items-center gap-2 text-xs ${remotePin.length >= 4 ? 'text-surface-300' : 'text-surface-500'}`}>
+                        <input
+                            type="checkbox"
+                            checked={webServerAutoStart}
+                            disabled={remotePin.length < 4}
+                            onChange={(e) => setWebServerAutoStart(e.target.checked)}
+                            className="accent-accent"
+                        />
+                        Start the web server automatically when HISSOUNDBOARD opens
+                    </label>
+
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                        <p className="text-[11px] text-surface-400">
+                            {remotePin.length >= 4 ? 'PIN configured and synchronized with your soundboard folder.' : 'A PIN is required before the web server can start.'}
+                        </p>
+                        {remotePin.length >= 4 && (
+                            <button
+                                type="button"
+                                onClick={() => { setPinDraft(remotePin); setPinDialogError(null); setShowPinDialog(true); }}
+                                className="shrink-0 text-xs text-accent-light hover:text-accent transition-colors"
+                            >
+                                Change PIN
+                            </button>
+                        )}
+                    </div>
+                    {serverStatusError && <p className="text-[11px] text-red-400">{serverStatusError}</p>}
                 </div>
 
-                {/* Optional PIN protection for the remote */}
-                <div className="p-4 bg-surface-800/60 rounded-xl border border-surface-600/30 space-y-2">
-                    <label className="block text-xs font-medium text-surface-200">
-                        Remote PIN <span className="text-surface-500">(optional)</span>
-                    </label>
-                    <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        value={remotePin}
-                        onChange={(e) => setRemotePin(e.target.value.replace(/\s+/g, ''))}
-                        placeholder="No PIN — anyone on your network can control"
-                        className="w-full px-3 py-2 bg-surface-900 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
-                    />
-                    <p className="text-[11px] text-surface-400 leading-relaxed">
-                        {remotePin
-                            ? 'PIN required: the remote will ask for this code before it can see or trigger sounds.'
-                            : 'Without a PIN, anyone on the same Wi-Fi/LAN can open the remote and trigger your sounds. Set a PIN on untrusted networks.'}
-                    </p>
-                </div>
+                {webServerRunning && (
+                    <div className="flex items-start gap-4 p-4 bg-surface-800/60 rounded-xl border border-surface-600/30">
+                        {qrCodeUrl && <img src={qrCodeUrl} alt="QR Code for remote control" className="w-28 h-28 rounded-lg" />}
+                        <div className="flex flex-col gap-2 min-w-0">
+                            <p className="text-xs text-surface-300">Scan to connect:</p>
+                            <a href={serverUrl} className="text-sm text-accent-light hover:text-accent font-mono break-all transition-colors">
+                                {serverUrl}
+                            </a>
+                        </div>
+                    </div>
+                )}
+
+                {showPinDialog && (
+                    <div className="p-4 bg-surface-900 rounded-xl border border-accent/40 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <label className="text-sm font-medium text-surface-100">Set remote PIN</label>
+                            <button type="button" onClick={generatePin} className="text-xs text-accent-light hover:text-accent transition-colors">Generate 4-digit code</button>
+                        </div>
+                        <input
+                            autoFocus
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={pinDraft}
+                            onChange={(e) => { setPinDraft(e.target.value.replace(/\s+/g, '')); setPinDialogError(null); }}
+                            placeholder="At least 4 characters"
+                            className="w-full px-3 py-2 bg-surface-800 border border-surface-600/50 rounded-xl text-sm text-white/90 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors"
+                        />
+                        <p className="text-[11px] text-surface-400">This PIN is mandatory, stored in the sync folder, and cannot be removed later.</p>
+                        {pinDialogError && <p className="text-[11px] text-red-400">{pinDialogError}</p>}
+                        <div className="flex justify-end gap-2">
+                            <button type="button" onClick={() => setShowPinDialog(false)} className="px-3 py-2 text-xs text-surface-300 hover:text-white">Cancel</button>
+                            <button type="button" onClick={() => void savePinAndStartServer()} className="px-3 py-2 rounded-lg text-xs font-medium bg-accent/20 text-accent-light border border-accent/30 hover:bg-accent/30">Save & start</button>
+                        </div>
+                    </div>
+                )}
 
                 {showWizard && <AudioSetupWizard onClose={() => setShowWizard(false)} />}
             </div>
