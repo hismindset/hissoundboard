@@ -131,8 +131,8 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                     <Section title="📱 Phone / tablet remote">
                         <ol className="list-decimal pl-5 space-y-1">
                             <li>Make sure your phone is on the <strong>same network</strong> as this PC.</li>
-                            <li>Open <strong>Settings</strong> and scan the <strong>QR code</strong> (or type the shown <code>http://…:8080</code> address).</li>
-                            <li>Tap sounds, switch pages, or hit Stop All — it updates live as you edit the board.</li>
+                            <li>Open <strong>Settings</strong>, turn on the local web server, and set a PIN when prompted. You can generate a four-digit code there.</li>
+                            <li>Scan the shown <strong>QR code</strong> (or type the <code>http://…:8080</code> address), enter the PIN, then tap sounds, switch pages, or hit Stop All.</li>
                         </ol>
                     </Section>
 

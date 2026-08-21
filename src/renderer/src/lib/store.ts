@@ -42,8 +42,10 @@ interface SoundboardState {
     shortcutMode: ShortcutMode;
 
     // ── Remote Control ───────────────────────────────────────────────────
-    /** Optional PIN required to control the phone/tablet remote ('' = disabled). */
+    /** Mandatory PIN required to control the phone/tablet remote (empty until configured). */
     remotePin: string;
+    /** Whether the opt-in remote web server starts when the app launches. */
+    webServerAutoStart: boolean;
 
     // ── Library Drawer ───────────────────────────────────────────────────
     libraryOpen: boolean;
@@ -90,6 +92,7 @@ interface SoundboardState {
     // Shortcuts
     setShortcutMode: (mode: ShortcutMode) => void;
     setRemotePin: (pin: string) => void;
+    setWebServerAutoStart: (enabled: boolean) => void;
 
     // Library drawer
     setLibraryOpen: (open: boolean) => void;
@@ -205,6 +208,7 @@ export const useSoundboardStore = create<SoundboardState>()(
             voiceEffectParams: {},
             shortcutMode: 'numpad',
             remotePin: '',
+            webServerAutoStart: false,
             libraryOpen: false,
             hasCompletedSetup: false,
             showWaylandWarning: false,
@@ -371,6 +375,7 @@ export const useSoundboardStore = create<SoundboardState>()(
 
             setShortcutMode: (mode) => set({ shortcutMode: mode }),
             setRemotePin: (pin) => set({ remotePin: pin }),
+            setWebServerAutoStart: (enabled) => set({ webServerAutoStart: enabled }),
 
             // ── Library Drawer ───────────────────────────────────────────────
 
@@ -432,7 +437,7 @@ export const useSoundboardStore = create<SoundboardState>()(
         }),
         {
             name: 'opensoundboard-storage',
-            version: 7, // Bump version: main process now owns persistence (config.json + local-settings.json)
+            version: 8, // v8 syncs remote PIN and web-server auto-start with config.json
             storage: createJSONStorage(() => ipcStorage),
             migrate: (persistedState: any, version: number) => {
                 let state = persistedState;
@@ -492,6 +497,10 @@ export const useSoundboardStore = create<SoundboardState>()(
                     state.remotePin = state.remotePin ?? '';
                 }
 
+                if (version <= 7) {
+                    state.webServerAutoStart = state.webServerAutoStart === true;
+                }
+
                 return state;
             },
             partialize: (state) => ({
@@ -504,6 +513,7 @@ export const useSoundboardStore = create<SoundboardState>()(
                 shortcutMode: state.shortcutMode,
                 // activeSounds: state.activeSounds, // DO NOT PERSIST SETS
                 remotePin: state.remotePin,
+                webServerAutoStart: state.webServerAutoStart,
                 hasCompletedSetup: state.hasCompletedSetup,
             }),
             merge: (persistedState: any, currentState) => {

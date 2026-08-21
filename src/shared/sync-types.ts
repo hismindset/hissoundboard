@@ -11,7 +11,7 @@ import type { Sound, GridSlot } from '../renderer/src/types/sound';
 import type { Page } from '../renderer/src/types/page';
 
 /** Bumped whenever the on-disk config.json shape changes. */
-export const CONFIG_SCHEMA_VERSION = 7;
+export const CONFIG_SCHEMA_VERSION = 8;
 
 export type ShortcutMode = 'numpad' | 'standard';
 
@@ -39,13 +39,16 @@ export interface SyncedConfig {
     activePageId: string;
     voiceEffectParams: Record<string, Record<string, number>>;
     shortcutMode: ShortcutMode;
+    /** PIN protecting the remote-control server. Stored with the shared board. */
+    remotePin: string;
+    /** Whether to start the web server automatically when the app launches. */
+    webServerAutoStart: boolean;
 }
 
 /** Local state, written to `userData/local-settings.json`. Never synced. */
 export interface LocalSettings {
     version: 1;
     audioSettings: AudioSettings;
-    remotePin: string;
     hasCompletedSetup: boolean;
 }
 
@@ -67,8 +70,9 @@ export interface PersistedStateFields {
     activePageId: string;
     voiceEffectParams: Record<string, Record<string, number>>;
     shortcutMode: ShortcutMode;
-    audioSettings: AudioSettings;
     remotePin: string;
+    webServerAutoStart: boolean;
+    audioSettings: AudioSettings;
     hasCompletedSetup: boolean;
 }
 

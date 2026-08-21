@@ -25,9 +25,10 @@ import {
 //   syncRoot = syncSettings.syncFolder ?? app.getPath('userData')
 //
 //   <syncRoot>/config.json        synced: library, grid, pages, activePageId,
-//                                  voiceEffectParams, shortcutMode
+//                                  voiceEffectParams, shortcutMode, remote PIN
+//                                  and remote web-server settings
 //   <syncRoot>/sounds/            audio files
-//   userData/local-settings.json  local: audioSettings, remotePin, hasCompletedSetup
+//   userData/local-settings.json  local: audioSettings, hasCompletedSetup
 //   userData/sync-settings.json   pointer: { syncFolder, legacySoundsDir? }
 //
 // WP1 scope: no folder picker, no watcher, no startup dialogs — syncFolder
@@ -142,8 +143,17 @@ function writeFileAtomic(filePath: string, contents: string, withBackup: boolean
 // build functions below encode that split with full type-checking; the key
 // lists themselves double as documentation of the split.
 
-const SYNCED_KEYS = ['library', 'grid', 'pages', 'activePageId', 'voiceEffectParams', 'shortcutMode'] as const;
-const LOCAL_KEYS = ['audioSettings', 'remotePin', 'hasCompletedSetup'] as const;
+const SYNCED_KEYS = [
+    'library',
+    'grid',
+    'pages',
+    'activePageId',
+    'voiceEffectParams',
+    'shortcutMode',
+    'remotePin',
+    'webServerAutoStart',
+] as const;
+const LOCAL_KEYS = ['audioSettings', 'hasCompletedSetup'] as const;
 
 function buildSyncedConfig(state: Pick<PersistedStateFields, (typeof SYNCED_KEYS)[number]>): SyncedConfig {
     return {
@@ -155,6 +165,8 @@ function buildSyncedConfig(state: Pick<PersistedStateFields, (typeof SYNCED_KEYS
         activePageId: state.activePageId,
         voiceEffectParams: state.voiceEffectParams,
         shortcutMode: state.shortcutMode,
+        remotePin: state.remotePin,
+        webServerAutoStart: state.webServerAutoStart,
     };
 }
 
@@ -162,7 +174,6 @@ function buildLocalSettings(state: Pick<PersistedStateFields, (typeof LOCAL_KEYS
     return {
         version: 1,
         audioSettings: state.audioSettings,
-        remotePin: state.remotePin,
         hasCompletedSetup: state.hasCompletedSetup,
     };
 }
@@ -266,6 +277,8 @@ function buildEmptySyncedConfig(shortcutMode: SyncedConfig['shortcutMode']): Syn
         activePageId: '',
         voiceEffectParams: {},
         shortcutMode,
+        remotePin: '',
+        webServerAutoStart: false,
     };
 }
 
@@ -283,12 +296,14 @@ function normalizeSyncedConfig(raw: any): SyncedConfig {
         activePageId: raw.activePageId ?? '',
         voiceEffectParams: raw.voiceEffectParams ?? {},
         shortcutMode: raw.shortcutMode === 'standard' ? 'standard' : 'numpad',
+        remotePin: typeof raw.remotePin === 'string' ? raw.remotePin : '',
+        webServerAutoStart: raw.webServerAutoStart === true,
     };
 }
 
 /** Point sync-settings.json + in-memory state at `folder`, given the
  *  `SyncedConfig` that is now in effect there. Shared tail of all three
- *  apply-folder actions. Local-only fields (audio/pin/setup) are carried
+ *  apply-folder actions. Local-only fields (audio/setup) are carried
  *  over from whatever we had cached before. */
 function commitFolder(folder: string, synced: SyncedConfig): void {
     syncSettings = { ...syncSettings, syncFolder: folder, legacySoundsDir: undefined };
@@ -302,8 +317,9 @@ function commitFolder(folder: string, synced: SyncedConfig): void {
         activePageId: synced.activePageId,
         voiceEffectParams: synced.voiceEffectParams,
         shortcutMode: synced.shortcutMode,
+        remotePin: synced.remotePin,
+        webServerAutoStart: synced.webServerAutoStart,
         audioSettings: priorState?.audioSettings ?? DEFAULT_AUDIO_SETTINGS,
-        remotePin: priorState?.remotePin ?? '',
         hasCompletedSetup: priorState?.hasCompletedSetup ?? false,
     };
     cachedPayload = { state: nextState, version: CONFIG_SCHEMA_VERSION };
@@ -676,7 +692,9 @@ function init(): void {
         corruptRecovered = recovered;
     }
 
-    const local = readJsonFile<LocalSettings>(getLocalSettingsPath());
+    // v7 stored remotePin in local-settings.json. Read it only as a migration
+    // source; v8 writes it into the shared config.json and removes it locally.
+    const local = readJsonFile<LocalSettings & { remotePin?: unknown }>(getLocalSettingsPath());
 
     if (!synced && !local) {
         // Nothing written yet — either a brand-new install, or an existing
@@ -688,18 +706,21 @@ function init(): void {
         return;
     }
 
+    const legacyRemotePin = typeof local?.remotePin === 'string' ? local.remotePin : '';
     const state: PersistedStateFields = {
         library: synced?.library ?? {},
         grid: synced?.grid ?? {},
         pages: synced?.pages ?? [],
         activePageId: synced?.activePageId ?? '',
         voiceEffectParams: synced?.voiceEffectParams ?? {},
-        // schemaVersion < CONFIG_SCHEMA_VERSION is accepted as-is here: missing
-        // fields are simply defaulted below, which is forward-migration enough
-        // since v7 is the first on-disk file version.
+        // Older config versions are accepted here; missing fields are defaulted
+        // and then atomically migrated below.
         shortcutMode: synced?.shortcutMode ?? 'numpad',
+        // Prefer the shared value. A v7 local PIN is only used while migrating
+        // a config that predates this shared field.
+        remotePin: typeof synced?.remotePin === 'string' ? synced.remotePin : legacyRemotePin,
+        webServerAutoStart: synced?.webServerAutoStart === true,
         audioSettings: local?.audioSettings ?? DEFAULT_AUDIO_SETTINGS,
-        remotePin: local?.remotePin ?? '',
         hasCompletedSetup: local?.hasCompletedSetup ?? false,
     };
 
@@ -707,8 +728,37 @@ function init(): void {
 
     // Seed the write-suppression hash from what's on disk so an unmodified
     // session doesn't rewrite an already up-to-date config.json.
+    const needsLocalMigration = Object.prototype.hasOwnProperty.call(local ?? {}, 'remotePin');
     if (synced) {
-        lastWrittenHash = sha1(JSON.stringify(buildSyncedConfig(state), null, 2));
+        const migratedSynced = buildSyncedConfig(state);
+        const needsSyncedMigration =
+            synced.schemaVersion !== CONFIG_SCHEMA_VERSION ||
+            typeof synced.remotePin !== 'string' ||
+            typeof synced.webServerAutoStart !== 'boolean';
+
+        if (needsSyncedMigration) {
+            const configJson = JSON.stringify(migratedSynced, null, 2);
+            writeFileAtomic(getConfigPath(), configJson, true);
+            lastWrittenHash = sha1(configJson);
+        } else {
+            // Seed the write-suppression hash from what's on disk so an
+            // unmodified session doesn't rewrite an already up-to-date config.
+            lastWrittenHash = sha1(JSON.stringify(migratedSynced, null, 2));
+        }
+    } else if (needsLocalMigration) {
+        // A partially written v7 profile may have local settings but no
+        // config.json. Preserve its PIN by creating the new shared config.
+        const configJson = JSON.stringify(buildSyncedConfig(state), null, 2);
+        writeFileAtomic(getConfigPath(), configJson, true);
+        lastWrittenHash = sha1(configJson);
+    }
+
+    if (needsLocalMigration) {
+        writeFileAtomic(
+            getLocalSettingsPath(),
+            JSON.stringify(buildLocalSettings(state), null, 2),
+            false
+        );
     }
 }
 
@@ -888,8 +938,9 @@ function performReload(isRetry: boolean): void {
             activePageId: normalized.activePageId,
             voiceEffectParams: normalized.voiceEffectParams,
             shortcutMode: normalized.shortcutMode,
+            remotePin: normalized.remotePin,
+            webServerAutoStart: normalized.webServerAutoStart,
             audioSettings: priorState?.audioSettings ?? DEFAULT_AUDIO_SETTINGS,
-            remotePin: priorState?.remotePin ?? '',
             hasCompletedSetup: priorState?.hasCompletedSetup ?? false,
         },
         version: CONFIG_SCHEMA_VERSION,

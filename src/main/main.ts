@@ -200,12 +200,61 @@ const getRemotePath = () => {
 
 appServer.use(express.static(getRemotePath()));
 
-// Optional remote PIN. '' = disabled (anyone on the LAN may control, original
-// behaviour). When set, clients must authenticate before they can list or
-// trigger sounds. Kept in sync from the renderer via the 'set-remote-pin' IPC.
+// The remote is deliberately opt-in and always PIN protected. The renderer
+// keeps this value in the synced config; this process only holds the active
+// value required to authenticate HTTP and WebSocket clients.
 let remotePin = '';
+let remoteServerRunning = false;
 
-const isAuthed = (ws: WebSocket) => !remotePin || (ws as any).hsbAuthed === true;
+const hasValidRemotePin = () => remotePin.length >= 4;
+
+const getRemoteServerStatus = () => ({
+    running: remoteServerRunning,
+    pinConfigured: hasValidRemotePin(),
+});
+
+const startRemoteServer = (): Promise<{ ok: boolean; error?: string }> => {
+    if (remoteServerRunning) return Promise.resolve({ ok: true });
+    if (!hasValidRemotePin()) {
+        return Promise.resolve({ ok: false, error: 'Set a PIN with at least 4 characters before starting the web server.' });
+    }
+
+    return new Promise((resolve) => {
+        const handleError = (error: Error) => {
+            server.off('listening', handleListening);
+            remoteServerRunning = false;
+            console.error('[Remote] Failed to start server:', error);
+            resolve({ ok: false, error: error.message });
+        };
+        const handleListening = () => {
+            server.off('error', handleError);
+            remoteServerRunning = true;
+            console.log(`Remote control server running on http://${getLocalIp()}:${SERVER_PORT}`);
+            resolve({ ok: true });
+        };
+
+        server.once('error', handleError);
+        server.once('listening', handleListening);
+        server.listen(SERVER_PORT, '0.0.0.0');
+    });
+};
+
+const stopRemoteServer = (): Promise<void> => {
+    if (!remoteServerRunning) return Promise.resolve();
+
+    // Close live connections first, otherwise http.Server#close waits for the
+    // remote browser to disconnect before the settings change takes effect.
+    wss.clients.forEach((client) => client.terminate());
+    remoteServerRunning = false;
+    return new Promise((resolve) => {
+        server.close(() => {
+            console.log('[Remote] Web server stopped.');
+            resolve();
+        });
+    });
+};
+
+const isAuthed = (ws: WebSocket) => (ws as any).hsbAuthed === true;
 
 const broadcast = (data: object) => {
     const message = JSON.stringify(data);
@@ -218,13 +267,9 @@ const broadcast = (data: object) => {
 };
 
 wss.on('connection', (ws: WebSocket) => {
-    (ws as any).hsbAuthed = !remotePin;
-    if (remotePin) {
-        // Tell the remote to ask the user for the PIN.
-        ws.send(JSON.stringify({ type: 'auth-required' }));
-    } else {
-        mainWindow?.webContents.send('request-sounds-for-remote');
-    }
+    (ws as any).hsbAuthed = false;
+    // The remote always asks for the PIN before it can see the board.
+    ws.send(JSON.stringify({ type: 'auth-required' }));
 
     ws.on('message', (message) => {
         try {
@@ -265,11 +310,10 @@ wss.on('connection', (ws: WebSocket) => {
     });
 });
 
-// Guard the HTTP control endpoints with the same optional PIN. External tools
-// (Stream Deck, Wayland shortcuts) pass it as ?pin=… when one is configured.
+// Guard the HTTP control endpoints with the mandatory PIN. External tools
+// (Stream Deck, Wayland shortcuts) pass it as ?pin=….
 const httpPinOk = (req: express.Request, res: express.Response): boolean => {
-    if (!remotePin) return true;
-    if (req.query.pin === remotePin) return true;
+    if (hasValidRemotePin() && req.query.pin === remotePin) return true;
     res.status(401).json({ ok: false, error: 'PIN required' });
     return false;
 };
@@ -694,17 +738,35 @@ const setupIpcHandlers = () => {
         }
     });
 
-    ipcMain.on('set-remote-pin', (_event, pin: string) => {
-        remotePin = typeof pin === 'string' ? pin.trim() : '';
-        console.log(`[Remote] PIN ${remotePin ? 'enabled' : 'disabled'}`);
-        // Drop the auth state of connected clients so the new policy takes
-        // effect immediately (they'll be re-prompted if a PIN is now required).
+    ipcMain.handle('remote-server:get-status', () => getRemoteServerStatus());
+
+    ipcMain.handle('remote-server:configure', (_event, pin: string) => {
+        const nextPin = typeof pin === 'string' ? pin.trim() : '';
+        // A PIN can be changed, but never removed. This also rejects short
+        // values so a malformed synced config cannot weaken the server.
+        if (nextPin && nextPin.length < 4) {
+            return { ok: false, error: 'The PIN must contain at least 4 characters.' };
+        }
+        if (!nextPin && remotePin) {
+            return { ok: false, error: 'The PIN cannot be removed once it has been set.' };
+        }
+        remotePin = nextPin;
+        console.log(`[Remote] PIN ${remotePin ? 'configured' : 'not configured'}`);
+        // Drop the auth state of connected clients so a changed PIN takes
+        // effect immediately.
         wss.clients.forEach((client) => {
-            (client as any).hsbAuthed = !remotePin;
-            if (remotePin && client.readyState === WebSocket.OPEN) {
+            (client as any).hsbAuthed = false;
+            if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ type: 'auth-required' }));
             }
         });
+        return { ok: true };
+    });
+
+    ipcMain.handle('remote-server:start', () => startRemoteServer());
+    ipcMain.handle('remote-server:stop', async () => {
+        await stopRemoteServer();
+        return { ok: true };
     });
 
     // Key Recording IPC
@@ -752,6 +814,12 @@ app.on('ready', () => {
     // from the very first frame.
     configStore.init();
 
+    // The server remains off unless the synced startup preference explicitly
+    // requests it and its mandatory PIN is valid. It starts before the window
+    // has finished rendering, so the remote is ready as soon as the app is.
+    const initialRemoteSettings = configStore.getInitialPersistedPayload()?.state;
+    remotePin = initialRemoteSettings?.remotePin?.trim() ?? '';
+
     ensureSoundsDir();
     setupIpcHandlers();
     createWindow();
@@ -763,14 +831,14 @@ app.on('ready', () => {
     // Linux Specific Startup: create virtual sink + loop the mic into it (OS-level mixing)
     linuxAudio.ensureAudioSink();
 
-    server.listen(SERVER_PORT, '0.0.0.0', () => {
-        console.log(`Remote control server running on http://${getLocalIp()}:${SERVER_PORT}`);
-    });
+    if (initialRemoteSettings?.webServerAutoStart && hasValidRemotePin()) {
+        void startRemoteServer();
+    }
 });
 
 app.on('window-all-closed', () => {
     uIOhook.stop();
-    server.close();
+    void stopRemoteServer();
     if (process.platform !== 'darwin') {
         app.quit();
     }

@@ -145,14 +145,13 @@ Notes:
 ## 🔒 Privacy & Network
 
 - **No telemetry.** HISSOUNDBOARD does not collect or send any usage data.
-- **Local web server.** For the phone/tablet remote, the app runs a small HTTP +
-  WebSocket server on **port `8080`**, bound to your local network only. It is
-  used solely to serve the remote page and relay button presses — nothing leaves
-  your LAN. Your OS/firewall may ask to allow incoming connections; that is
-  expected (decline it if you don't use the remote). The QR code is generated
-  **locally** (no third-party service). By default anyone on your LAN can use
-  the remote; set an optional **Remote PIN** in Settings to require a code on
-  untrusted networks.
+- **Local web server.** The phone/tablet remote uses a small HTTP + WebSocket
+  server on **port `8080`**, bound to your local network only. It is **off by
+  default** and can be started in Settings when needed. Starting it always
+  requires a PIN of at least four characters; the PIN is saved in your synced
+  configuration and cannot be removed later. You may also enable automatic
+  startup in Settings. The QR code is generated **locally** (no third-party
+  service); nothing leaves your LAN.
 - **Your sounds stay local.** Audio files live in your app data folder (or a
   custom directory you choose) and are never uploaded.
 

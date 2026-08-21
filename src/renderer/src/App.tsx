@@ -152,10 +152,11 @@ const App: React.FC = () => {
         }
     }, [shortcutMode, pages]);
 
-    // Keep the remote-control PIN in sync with the local web server.
+    // Keep the synced remote-control PIN in sync with the local web server.
+    // Starting and stopping remains an explicit Settings action.
     const remotePin = useSoundboardStore((s) => s.remotePin);
     useEffect(() => {
-        window.api?.setRemotePin?.(remotePin || '');
+        void window.api?.configureRemoteServer?.(remotePin || '');
     }, [remotePin]);
 
     // Handle IPC events
