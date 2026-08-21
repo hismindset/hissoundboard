@@ -449,7 +449,7 @@ const Settings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             className={`relative w-11 h-6 rounded-full transition-colors ${webServerRunning ? 'bg-accent' : 'bg-surface-600'}`}
                             title={webServerRunning ? 'Stop web server' : 'Start web server'}
                         >
-                            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${webServerRunning ? 'translate-x-6' : 'translate-x-1'}`} />
+                            <span className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform ${webServerRunning ? 'translate-x-5' : 'translate-x-0'}`} />
                         </button>
                     </div>
 
