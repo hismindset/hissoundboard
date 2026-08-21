@@ -33,11 +33,13 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 
 ### 📂 Library & Files
 - **Smart drag & drop** to add sounds and arrange the grid.
-- **Download from URL** directly into your library.
-- **Custom sounds directory** (or use the default app data folder).
+- **Preview-play**: Audition any library sound before placing it on the board.
+- **Download from URL** directly into your library, including [Myinstants](https://www.myinstants.com/) sound-page links.
+- **Sync Folder**: Choose a folder to keep boards, sounds, remote settings, and app configuration synchronized between devices.
 
 ### 🎨 Interface
 - **Dark, gaming-inspired UI** with waveform previews (wavesurfer.js).
+- **In-app help**: A practical setup guide plus a deliberately fake Easter-egg help screen.
 
 ### 🔄 Updates
 - **In-app auto-update** (packaged builds only): On startup, the app checks GitHub Releases for a newer version.
@@ -55,10 +57,6 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 Not yet implemented — ideas under consideration:
 
 - **Record your own sounds**: Capture audio directly from your microphone inside the app to create new soundboard clips.
-- **Preview-play in the Library**: Audition sounds (small play button) in the library to pick the ones you want before placing them on the board.
-- **Sync between devices**: Keep pages, sounds, and settings in sync across multiple machines (mechanism still open).
-- **Myinstants link support**: Add sounds directly from a [Myinstants](https://www.myinstants.com/) link, not just `.mp3` files/URLs.
-- **In-app help**: Built-in help/guide (microphone & virtual-audio setup, possibly surfacing README content) so users don't have to leave the app.
 - **Multi-page view on wide windows**: Show several pages side by side when the window/monitor is wide.
 - **Horizontal layout for Standard mode**: In Standard (non-numpad) mode, lay sounds out left-to-right (e.g. 1–7) instead of a 3×3 grid.
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
@@ -131,8 +129,8 @@ Notes:
 
 ## 📱 Remote Control
 1. Make sure your phone/tablet is on the **same network** as the PC.
-2. Open **Settings** in the desktop app.
-3. Scan the **QR code** or type the shown address (e.g. `http://192.168.x.x:8080`) into your phone's browser.
+2. Open **Settings**, enable the local web server, and set the required PIN (or use its four-digit generator).
+3. Scan the **QR code** or type the shown address (e.g. `http://192.168.x.x:8080`) into your phone's browser, then enter the PIN.
 4. Tap sounds, switch pages, or hit **Stop All** — straight from your phone. The remote updates live as you edit the board.
 
 ## ⌨️ Shortcuts

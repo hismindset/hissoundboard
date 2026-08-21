@@ -6,7 +6,6 @@ import express from 'express';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import os from 'os';
-import https from 'https';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 // @ts-ignore
 import squirrelStartup from 'electron-squirrel-startup';
@@ -83,6 +82,40 @@ const ensureSoundsDir = () => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
+};
+
+type DownloadedSound = {
+    filePath: string;
+    originalName: string;
+};
+
+const AUDIO_FILE_EXTENSION = /\.(?:mp3|m4a|wav|ogg|aac|flac)$/i;
+
+/** Myinstants links point to a sound-page, while the downloadable asset lives
+ *  below /media/sounds/. Resolve the page in the trusted main process so the
+ *  renderer never has to scrape a cross-origin site. */
+const resolveDownloadUrl = async (input: string): Promise<URL> => {
+    let url: URL;
+    try {
+        url = new URL(input);
+    } catch {
+        throw new Error('Enter a valid HTTP(S) URL.');
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new Error('Only HTTP(S) URLs can be downloaded.');
+    }
+
+    const isMyinstants = /(^|\.)myinstants\.com$/i.test(url.hostname);
+    if (!isMyinstants || url.pathname.startsWith('/media/sounds/')) return url;
+
+    const page = await net.fetch(url.toString(), { redirect: 'follow' });
+    if (!page.ok) throw new Error(`Myinstants page could not be loaded (${page.status}).`);
+
+    const html = await page.text();
+    const audioMatch = html.match(/(?:href|src)=["']([^"']*\/media\/sounds\/[^"']+\.(?:mp3|m4a|wav|ogg|aac|flac)(?:\?[^"']*)?)["']/i);
+    if (!audioMatch) throw new Error('No downloadable audio file was found on this Myinstants page.');
+
+    return new URL(audioMatch[1].replace(/&amp;/g, '&'), page.url);
 };
 
 // ─── Window Creation ─────────────────────────────────────────────────────────
@@ -620,42 +653,29 @@ const setupIpcHandlers = () => {
         return { ip: getLocalIp(), port: SERVER_PORT };
     });
 
-    ipcMain.handle('download-url', async (_event, url: string) => {
+    ipcMain.handle('download-url', async (_event, url: string): Promise<DownloadedSound> => {
         ensureSoundsDir();
-        return new Promise<string>((resolve, reject) => {
-            const fileName = `download_${Date.now()}.mp3`;
-            const destPath = path.join(getSoundsDir(), fileName);
-            const file = fs.createWriteStream(destPath);
-            const httpProto = url.startsWith('https') ? https : http;
+        const sourceUrl = await resolveDownloadUrl(url);
+        const response = await net.fetch(sourceUrl.toString(), { redirect: 'follow' });
+        if (!response.ok) throw new Error(`Download failed (${response.status}).`);
 
-            const request = httpProto.get(url, (response) => {
-                if (
-                    response.statusCode &&
-                    response.statusCode >= 300 &&
-                    response.statusCode < 400 &&
-                    response.headers.location
-                ) {
-                    httpProto.get(response.headers.location, (redirectResponse) => {
-                        redirectResponse.pipe(file);
-                        file.on('finish', () => {
-                            file.close();
-                            resolve(`sound://play/${encodeURIComponent(fileName)}`);
-                        });
-                    });
-                    return;
-                }
-                response.pipe(file);
-                file.on('finish', () => {
-                    file.close();
-                    resolve(`sound://play/${encodeURIComponent(fileName)}`);
-                });
-            });
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!contentType.startsWith('audio/') && !AUDIO_FILE_EXTENSION.test(sourceUrl.pathname)) {
+            throw new Error('The URL did not return an audio file.');
+        }
 
-            request.on('error', (err) => {
-                fs.unlink(destPath, () => { });
-                reject(err.message);
-            });
-        });
+        const audioData = Buffer.from(await response.arrayBuffer());
+        if (audioData.length === 0) throw new Error('The downloaded audio file is empty.');
+
+        const originalName = path.basename(decodeURIComponent(sourceUrl.pathname)) || 'Downloaded Sound.mp3';
+        const extension = path.extname(originalName) || '.mp3';
+        const fileName = `download_${Date.now()}${extension}`;
+        fs.writeFileSync(path.join(getSoundsDir(), fileName), audioData);
+
+        return {
+            filePath: `sound://play/${encodeURIComponent(fileName)}`,
+            originalName,
+        };
     });
 
     ipcMain.on('sounds-for-remote', (_event, sounds) => {

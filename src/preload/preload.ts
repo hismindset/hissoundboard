@@ -109,8 +109,8 @@ const api = {
     getLocalIp: (): Promise<{ ip: string; port: number }> =>
         ipcRenderer.invoke('get-local-ip'),
 
-    /** Download an MP3 from a URL into the sounds directory */
-    downloadUrl: (url: string): Promise<string> =>
+    /** Download an audio file or Myinstants page into the sounds directory. */
+    downloadUrl: (url: string): Promise<{ filePath: string; originalName: string }> =>
         ipcRenderer.invoke('download-url', url),
 
     /** Get the native file path from a dropped File object */

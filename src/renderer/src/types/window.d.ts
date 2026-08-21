@@ -69,7 +69,7 @@ interface ElectronApi {
 
     saveSoundFile: (sourcePath: string, fileName: string) => Promise<string>;
     getLocalIp: () => Promise<{ ip: string; port: number }>;
-    downloadUrl: (url: string) => Promise<string>;
+    downloadUrl: (url: string) => Promise<{ filePath: string; originalName: string }>;
     getPathForFile: (file: File) => string;
     getSoundsDir: () => Promise<string>;
 
