@@ -77,7 +77,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ offer, onClose }) => {
             <div
                 className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in"
             >
-                <div className="w-full max-w-sm mx-4 bg-surface-900 border border-surface-600/40 rounded-2xl shadow-2xl animate-scale-in overflow-hidden">
+                <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] mx-4 bg-surface-900 border border-surface-600/40 rounded-2xl shadow-2xl animate-scale-in overflow-y-auto">
                     <div className="px-5 py-4">
                         <h3 className="text-base font-bold text-white/90 mb-4">Downloading update…</h3>
 
@@ -101,7 +101,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ offer, onClose }) => {
 
                     {error && (
                         <div className="px-5 py-3 bg-red-500/10 border-t border-red-500/30">
-                            <p className="text-xs text-red-400 mb-3">{error}</p>
+                            <p className="text-xs text-red-400 mb-3 break-all">{error}</p>
                             <button
                                 onClick={() => {
                                     setError(null);

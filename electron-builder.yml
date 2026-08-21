@@ -45,6 +45,9 @@ dmg:
   sign: false
 
 win:
+  # Keep the installer name stable and in sync with the path published in
+  # latest.yml, which electron-updater uses to download Windows updates.
+  artifactName: "${productName}.Setup.${version}.${ext}"
   # Pin to x64 explicitly: without an arch, electron-builder cross-builds for
   # the HOST architecture, so building on Apple Silicon silently produces a
   # Windows-on-ARM64 installer that can't run on ordinary (x64) Windows PCs.
