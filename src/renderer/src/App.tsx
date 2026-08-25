@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import type { UpdateOffer } from '../../shared/updater-types';
 import Grid from './components/Grid';
 import PageList from './components/PageList';
+import PageHeader from './components/PageHeader';
 import Settings from './components/Settings';
 import Library from './components/Library';
 import SoundEditor from './components/SoundEditor';
@@ -13,6 +14,7 @@ import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
 import { isEffectSlotId, getEffectPreset } from './lib/voiceEffects';
+import { useWindowWidth, visiblePageCount } from './lib/useWindowWidth';
 import wordmark from './assets/his_soundboard_logo.png';
 
 type View = 'grid' | 'settings';
@@ -55,6 +57,36 @@ const App: React.FC = () => {
     const libraryOpen = useSoundboardStore((s) => s.libraryOpen);
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
+    const setActivePage = useSoundboardStore((s) => s.setActivePage);
+
+    const windowWidth = useWindowWidth();
+    const maxVisible = visiblePageCount(windowWidth);
+
+    // Pick the slice of pages to show in the multi-page view. The currently
+    // active page is always the leftmost (primary) slot, followed by as many
+    // subsequent pages as fit on screen. If the active page is near the end
+    // and we don't have enough pages after it, we slide the window back so
+    // the user still sees the requested number of pages side-by-side. With
+    // only one page (or below the first breakpoint) the rightmost slots stay
+    // empty and we render the single-page layout instead.
+    const visiblePageIds = useMemo<(string | null)[]>(() => {
+        const slots: (string | null)[] = [null, null, null];
+        if (!pages || pages.length === 0 || maxVisible === 1) return slots;
+        const activeIdx = pages.findIndex(p => p.id === activePageId);
+        const startIdx = activeIdx < 0 ? 0 : activeIdx;
+        // Slide back if we don't have enough pages after the active one to
+        // fill the requested slot count.
+        const overflow = startIdx + maxVisible - pages.length;
+        const firstIdx = overflow > 0 ? Math.max(0, startIdx - overflow) : startIdx;
+        for (let i = 0; i < maxVisible; i++) {
+            const p = pages[firstIdx + i];
+            slots[i] = p ? p.id : null;
+        }
+        return slots;
+    }, [pages, activePageId, maxVisible]);
+
+    const visiblePages = visiblePageIds.filter((id): id is string => !!id);
+    const showMultiPage = visiblePages.length > 1;
 
     // Init Audio Controller with saved settings.
     // IMPORTANT: this runs the full init (including microphone passthrough) on
@@ -353,14 +385,42 @@ const App: React.FC = () => {
             <div className="flex-1 flex overflow-hidden">
                 {view === 'grid' && <PageList />}
 
-                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' ? 'items-center justify-center' : 'items-start pt-4 px-6 pb-6 overflow-auto'}`}>
+                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' && !showMultiPage ? 'items-center justify-center' : view === 'grid' ? 'items-stretch justify-start px-6 py-6 overflow-auto' : 'items-start pt-4 px-6 pb-6 overflow-auto'}`}>
                     {view === 'grid' ? (
-                        <>
-                            <Grid onEditSound={handleEditSound} onEditEffect={handleEditEffect} />
-                            <p className="text-[10px] text-surface-500 mt-4 select-none">
-                                Right Click = Edit · Middle Click = Remove · ESC = Panic
-                            </p>
-                        </>
+                        showMultiPage ? (
+                            <div className="flex-1 flex flex-row items-start justify-center gap-8 min-h-0">
+                                {visiblePages.map((pageId, idx) => {
+                                    const page = pages?.find(p => p.id === pageId);
+                                    if (!page) return null;
+                                    return (
+                                        <div key={pageId} className="flex flex-col gap-3 w-full max-w-[480px]">
+                                            <PageHeader
+                                                page={page}
+                                                isActive={pageId === activePageId}
+                                                emphasis={idx === 0}
+                                                onSelect={() => setActivePage(pageId)}
+                                            />
+                                            <Grid
+                                                pageId={pageId}
+                                                onEditSound={handleEditSound}
+                                                onEditEffect={handleEditEffect}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <>
+                                <Grid
+                                    pageId={activePageId}
+                                    onEditSound={handleEditSound}
+                                    onEditEffect={handleEditEffect}
+                                />
+                                <p className="text-[10px] text-surface-500 mt-4 select-none">
+                                    Right Click = Edit · Middle Click = Remove · ESC = Panic
+                                </p>
+                            </>
+                        )
                     ) : (
                         <Settings onClose={() => setView('grid')} />
                     )}
@@ -371,7 +431,7 @@ const App: React.FC = () => {
 
             <div className="h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
 
-            {!libraryOpen && view === 'grid' && (
+            {!libraryOpen && view === 'grid' && !showMultiPage && (
                 <button
                     onClick={toggleLibrary}
                     className="fixed right-0 top-1/2 -translate-y-1/2 z-30 bg-surface-800 border border-surface-600/50 border-r-0 rounded-l-xl px-1.5 py-6 text-surface-400 hover:text-accent-light hover:bg-surface-700 transition-all duration-200 group"

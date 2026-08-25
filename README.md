@@ -10,6 +10,7 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 ### 🎛️ Soundboard & Pages
 - **Numpad-style 3×3 grid**: "Just drag in and go" layout designed for muscle memory.
 - **Dynamic pages**: Create, rename, delete, and organize sounds across unlimited pages.
+- **Multi-page view on wide windows**: On screens ≥ 1280 px the active page is shown next to the following page; on ≥ 1800 px (e.g. WQHD) up to three pages are shown side by side, each with its own title bar and per-page modifier button. Clicks on any visible cell play their sound directly; global hotkeys keep working on every page.
 - **Per-sound editing**: Adjust per-sound volume (up to 200%), trim start/end, set optional fade-in/-out (DaVinci-style corner handles on the waveform), and choose a playback mode (one-shot or loop).
 - **Stop All / Panic**: Instantly stop every playing sound (button or `Escape`).
 
@@ -104,8 +105,9 @@ To play sounds into voice chats (Discord, Teams, Zoom), you need a **Virtual Aud
 
 #### macOS
 - Download the `.dmg`, open it, and drag `HISSOUNDBOARD` to Applications.
-- Since the app is not signed with an Apple Developer ID, macOS may say it is
-  damaged or from an unidentified developer. Clear the quarantine flag once:
+- The build is **ad-hoc signed**, so it runs out of the box. If Gatekeeper
+  still objects (e.g. you moved the file between volumes or used an older
+  pre-release build), clear the quarantine flag once:
   ```bash
   xattr -cr "/Applications/HISSOUNDBOARD.app"
   ```
@@ -147,7 +149,7 @@ Notes:
 - **Right-click**: Edit sound (context menu)
 - **Middle-click**: Remove sound from slot
 - **Escape**: Stop all sounds (panic)
-- Assign per-page trigger keys via the key icon on each page in the sidebar.
+- Assign per-page trigger keys via the key icon on each page in the sidebar (or directly on the page header when multiple pages are shown side by side).
 
 ## 🔒 Privacy & Network
 

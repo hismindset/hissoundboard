@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSoundboardStore } from '../lib/store';
 import { Page } from '../types/page';
 import ModifierSelect from './ModifierSelect';
+import { formatModifierKeys } from '../lib/utils';
 import logoUrl from '../assets/hismindset_white.png';
 
 const PageList: React.FC = () => {
@@ -110,18 +111,6 @@ const PageList: React.FC = () => {
         setDropPos(null);
     };
 
-    const formatKeys = (keys: number[]) => {
-        if (!keys || keys.length === 0) return '';
-        // Same simple mapping
-        const MAP: Record<number, string> = {
-            29: 'Ctrl', 3613: 'RCtrl',
-            56: 'Alt', 3640: 'RAlt',
-            42: 'Shift', 54: 'RShift',
-            3675: 'Meta', 3676: 'RMeta',
-        };
-        return keys.map(k => MAP[k] || 'Key').join('+');
-    };
-
     return (
         <div className="w-64 bg-surface-900 border-r border-surface-800 flex flex-col h-full select-none">
             <div className="p-4 border-b border-surface-800 flex items-center justify-between">
@@ -186,7 +175,7 @@ const PageList: React.FC = () => {
                                             {/* Shortcut Display */}
                                             {page.modifierKeys.length > 0 && (
                                                 <span className="text-[10px] text-surface-500 font-mono ml-3 truncate">
-                                                    {formatKeys(page.modifierKeys)}
+                                                    {formatModifierKeys(page.modifierKeys)}
                                                 </span>
                                             )}
                                         </div>

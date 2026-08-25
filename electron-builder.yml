@@ -30,11 +30,16 @@ asarUnpack:
 mac:
   target: dmg
   icon: resources/icon.icns
-  # CRITICAL: Disable signing as requested
-  identity: null
+  # Ad-hoc sign the bundle. identity: '-' tells electron-builder to sign with the
+  # ad-hoc identity (no Apple Developer certificate required) instead of leaving
+  # the binary fully unsigned. On Apple Silicon (macos-latest CI runner) an
+  # unsigned .app triggers Gatekeeper's "is beschädigt und kann nicht geöffnet
+  # werden" dialog when launched from a freshly downloaded DMG. Ad-hoc signing
+  # is enough to satisfy the quarantine check while still avoiding any paid
+  # signing identity. See: https://www.electron.build/configuration/mac#identity
+  identity: "-"
   entitlements: entitlements.plist
   entitlementsInherit: entitlements.plist
-  # For Apple Silicon, ad-hoc signing is required. builder does this automatically if identity is null.
   hardenedRuntime: false
   gatekeeperAssess: false
   # Required so macOS shows the microphone permission prompt for the soundboard passthrough.
