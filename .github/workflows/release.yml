@@ -185,6 +185,13 @@ jobs:
       - name: Build installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # electron-builder refuses to code-sign on pull_request builds by
+          # default ("Current build is a part of pull request, code signing
+          # will be skipped."). We ad-hoc sign the macOS bundle ourselves
+          # (electron-builder.yml uses identity: '-') so the resulting DMG
+          # is not rejected by Gatekeeper on Apple Silicon, so we have to
+          # explicitly opt in here.
+          CSC_FOR_PULL_REQUEST: "true"
         run: npm run dist -- --publish never
 
       - name: Upload installer artifact
