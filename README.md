@@ -58,10 +58,20 @@ A modern, open-source soundboard application built with Electron, React, and Typ
 Not yet implemented — ideas under consideration:
 
 - **Record your own sounds**: Capture audio directly from your microphone inside the app to create new soundboard clips.
+- **Multi-page view on wide windows**: Show several pages side by side when the window/monitor is wide.
+- **Better global-shortcut support on Wayland** ([#31](https://github.com/hismindset/hissoundboard/issues/31)): ship compositor-specific setup steps (GNOME, Sway, Hyprland) next to the existing KDE helper, and look at the Wayland GlobalShortcuts portal for a sandboxed in-app registration.
+- **Global "disable all shortcuts" kill switch** ([#32](https://github.com/hismindset/hissoundboard/issues/32)): a one-click suspend for uiohook / Electron globalShortcut registration, useful when handing the keyboard to a guest or sharing the screen.
+- **Per-page hotkey disable** ([#33](https://github.com/hismindset/hissoundboard/issues/33)): a per-page `shortcutsEnabled` flag so a single test / scratch page can't fire on stray numpad presses.
+- **"Require a modifier" mode** ([#34](https://github.com/hismindset/hissoundboard/issues/34)): make it the default that pages without a modifier trigger are ignored by numpad presses, with a per-page opt-out for users who rely on the current behaviour.
+- **Autotune voice effect** ([#36](https://github.com/hismindset/hissoundboard/issues/36)): a 7th effect in the voice changer with editable scale, key, and retune speed.
 - **Horizontal layout for Standard mode**: In Standard (non-numpad) mode, lay sounds out left-to-right (e.g. 1–7) instead of a 3×3 grid.
 - **More audio sources**: Support additional audio output/input sources beyond the current routing.
 - **Export & share settings (incl. sounds)**: Export a board to share with friends — per page or the whole setup.
 - **Localization** — add German (i18n), or keep the UI English-only for wider open-source reach?
+
+### 🐛 Known bugs under investigation
+
+- **Trim settings ignored for some sounds** ([#35](https://github.com/hismindset/hissoundboard/issues/35)): a sound that has non-zero `trimStart` / `trimEnd` plays back in full length on click or via shortcut. Needs a reliable repro to confirm the root cause (suspected Howl `seek()` race or a config-migration edge case).
 
 ---
 
