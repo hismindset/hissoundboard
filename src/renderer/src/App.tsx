@@ -14,7 +14,7 @@ import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
 import { isEffectSlotId, getEffectPreset } from './lib/voiceEffects';
-import { useWindowWidth, isMultiPageWidth } from './lib/useWindowWidth';
+import { useWindowWidth, visiblePageCount } from './lib/useWindowWidth';
 import wordmark from './assets/his_soundboard_logo.png';
 
 type View = 'grid' | 'settings';
@@ -60,23 +60,33 @@ const App: React.FC = () => {
     const setActivePage = useSoundboardStore((s) => s.setActivePage);
 
     const windowWidth = useWindowWidth();
-    const multiPage = isMultiPageWidth(windowWidth);
+    const maxVisible = visiblePageCount(windowWidth);
 
-    // The pair of pages to show in multi-page view. The currently active page
-    // is always the left (primary) slot, with the next page on the right. If
-    // the active page is the very last one, we slide the window back so the
-    // user still sees two pages side-by-side. With only one page, the right
-    // slot stays empty and we render the single-page layout instead.
-    const visiblePages = useMemo(() => {
-        if (!pages || pages.length === 0) return { leftId: '', rightId: '' };
+    // Pick the slice of pages to show in the multi-page view. The currently
+    // active page is always the leftmost (primary) slot, followed by as many
+    // subsequent pages as fit on screen. If the active page is near the end
+    // and we don't have enough pages after it, we slide the window back so
+    // the user still sees the requested number of pages side-by-side. With
+    // only one page (or below the first breakpoint) the rightmost slots stay
+    // empty and we render the single-page layout instead.
+    const visiblePageIds = useMemo<(string | null)[]>(() => {
+        const slots: (string | null)[] = [null, null, null];
+        if (!pages || pages.length === 0 || maxVisible === 1) return slots;
         const activeIdx = pages.findIndex(p => p.id === activePageId);
-        if (activeIdx < 0) return { leftId: pages[0].id, rightId: pages[1]?.id ?? '' };
-        const left = pages[activeIdx];
-        const right = pages[activeIdx + 1] ?? pages[activeIdx - 1] ?? null;
-        return { leftId: left.id, rightId: right ? right.id : '' };
-    }, [pages, activePageId]);
+        const startIdx = activeIdx < 0 ? 0 : activeIdx;
+        // Slide back if we don't have enough pages after the active one to
+        // fill the requested slot count.
+        const overflow = startIdx + maxVisible - pages.length;
+        const firstIdx = overflow > 0 ? Math.max(0, startIdx - overflow) : startIdx;
+        for (let i = 0; i < maxVisible; i++) {
+            const p = pages[firstIdx + i];
+            slots[i] = p ? p.id : null;
+        }
+        return slots;
+    }, [pages, activePageId, maxVisible]);
 
-    const showMultiPage = multiPage && !!visiblePages.rightId;
+    const visiblePages = visiblePageIds.filter((id): id is string => !!id);
+    const showMultiPage = visiblePages.length > 1;
 
     // Init Audio Controller with saved settings.
     // IMPORTANT: this runs the full init (including microphone passthrough) on
@@ -379,7 +389,7 @@ const App: React.FC = () => {
                     {view === 'grid' ? (
                         showMultiPage ? (
                             <div className="flex-1 flex flex-row items-start justify-center gap-8 min-h-0">
-                                {([visiblePages.leftId, visiblePages.rightId] as string[]).map((pageId, idx) => {
+                                {visiblePages.map((pageId, idx) => {
                                     const page = pages?.find(p => p.id === pageId);
                                     if (!page) return null;
                                     return (

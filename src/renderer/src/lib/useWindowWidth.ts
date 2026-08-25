@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 
-const MULTI_PAGE_BREAKPOINT = 1280;
+/** Window widths at which the multi-page view steps up to a wider layout. */
+const MULTI_PAGE_BREAKPOINTS = {
+    twoPages: 1280,
+    threePages: 1800,
+} as const;
 
 export const useWindowWidth = (): number => {
     const [width, setWidth] = useState<number>(() => window.innerWidth);
@@ -24,4 +28,12 @@ export const useWindowWidth = (): number => {
     return width;
 };
 
-export const isMultiPageWidth = (width: number): boolean => width >= MULTI_PAGE_BREAKPOINT;
+/** Maximum number of pages that fit side-by-side at the given window width. */
+export const visiblePageCount = (width: number): 1 | 2 | 3 => {
+    if (width >= MULTI_PAGE_BREAKPOINTS.threePages) return 3;
+    if (width >= MULTI_PAGE_BREAKPOINTS.twoPages) return 2;
+    return 1;
+};
+
+export { MULTI_PAGE_BREAKPOINTS };
+
