@@ -7,15 +7,19 @@ import { useSoundboardStore } from '../lib/store';
 const NUMPAD_LAYOUT = [7, 8, 9, 4, 5, 6, 1, 2, 3];
 
 interface GridProps {
+    pageId: string;
     onEditSound: (soundId: string) => void;
     onEditEffect: (presetId: string) => void;
 }
 
-const Grid: React.FC<GridProps> = ({ onEditSound, onEditEffect }) => {
+const Grid: React.FC<GridProps> = ({ pageId, onEditSound, onEditEffect }) => {
+    // The active page id is used purely for the empty-state hint. The actual
+    // grid renders whatever pageId was passed in, so this component can be
+    // reused for every page visible in multi-page view.
     const activePageId = useSoundboardStore((s) => s.activePageId);
 
     // If no page is active (e.g. empty state), show nothing or a placeholder
-    if (!activePageId) {
+    if (!pageId) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-surface-500 gap-2">
                 <p>No active page.</p>
@@ -25,11 +29,15 @@ const Grid: React.FC<GridProps> = ({ onEditSound, onEditEffect }) => {
     }
 
     return (
-        <div className="grid grid-cols-3 gap-3 w-full max-w-[480px] animate-fade-in">
+        <div
+            className="grid grid-cols-3 gap-3 w-full max-w-[480px] animate-fade-in"
+            data-page-id={pageId}
+            data-active={pageId === activePageId ? 'true' : 'false'}
+        >
             {NUMPAD_LAYOUT.map((numpadNum, gridIndex) => (
                 <SoundCell
-                    key={`${activePageId}-${gridIndex}`}
-                    page={activePageId}
+                    key={`${pageId}-${gridIndex}`}
+                    page={pageId}
                     slot={gridIndex}
                     numpadLabel={numpadNum}
                     onEditSound={onEditSound}

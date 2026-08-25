@@ -33,3 +33,19 @@ export function formatSoundName(filename: string): string {
 export function generateId(): string {
     return uuidv4();
 }
+
+/**
+ * Format uiohook modifier keycodes as a human-readable shortcut label.
+ * Unknown keycodes fall back to the literal string "Key".
+ */
+const UIOHOOK_KEY_LABEL: Record<number, string> = {
+    29: 'Ctrl', 3613: 'RCtrl',
+    56: 'Alt', 3640: 'RAlt',
+    42: 'Shift', 54: 'RShift',
+    3675: 'Meta', 3676: 'RMeta',
+};
+
+export function formatModifierKeys(keys: number[]): string {
+    if (!keys || keys.length === 0) return '';
+    return keys.map(k => UIOHOOK_KEY_LABEL[k] || 'Key').join('+');
+}
