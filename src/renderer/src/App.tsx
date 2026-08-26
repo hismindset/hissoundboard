@@ -417,7 +417,7 @@ const App: React.FC = () => {
                                     onEditEffect={handleEditEffect}
                                 />
                                 <p className="text-[10px] text-surface-500 mt-4 select-none">
-                                    Right Click = Edit · Middle Click = Remove · ESC = Panic
+                                    Right Click = Edit · Middle Click = Remove · Ctrl + 0 = Panic
                                 </p>
                             </>
                         )
