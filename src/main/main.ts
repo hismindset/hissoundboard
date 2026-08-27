@@ -73,6 +73,19 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow;
 
+// Guard against "Object has been destroyed" crashes: uIOhook keeps firing on
+// the JS event loop after the window (or the app) is gone, and
+// mainWindow?.webContents.send() then throws because `webContents` itself is
+// the destroyed object (optional chaining doesn't help here). Use this for
+// every send() from a long-lived hook (uiohook, globalShortcut, web server).
+const safeSendToRenderer = (channel: string, payload?: unknown) => {
+    if (!mainWindow) return;
+    if (mainWindow.isDestroyed()) return;
+    const wc = mainWindow.webContents;
+    if (wc.isDestroyed()) return;
+    wc.send(channel, payload);
+};
+
 // Sounds directory: delegated to configStore, which resolves it from
 // sync-settings.json (<syncRoot>/sounds, or the legacy custom dir).
 const getSoundsDir = () => configStore.getSoundsDir();
@@ -327,7 +340,7 @@ wss.on('connection', (ws: WebSocket) => {
 
             if (data.type === 'play-sound') {
                 if (data.pageId === '__PANIC__' || (data.page === -1 && data.slot === -1)) {
-                    mainWindow?.webContents.send('panic-stop');
+                    safeSendToRenderer('panic-stop');
                 } else {
                     mainWindow?.webContents.send('trigger-sound', {
                         pageId: data.pageId, // ID driven
@@ -376,7 +389,7 @@ appServer.get('/api/trigger/:pageId/:slot', (req, res) => {
 
 appServer.get('/api/panic', (req, res) => {
     if (!httpPinOk(req, res)) return;
-    mainWindow?.webContents.send('panic-stop');
+    safeSendToRenderer('panic-stop');
     res.json({ ok: true });
 });
 
@@ -504,8 +517,15 @@ const registerFallbackShortcuts = () => {
     });
 
     try {
-        globalShortcut.register('Escape', () => {
-            mainWindow?.webContents.send('panic-stop');
+        // Panic key: Cmd/Ctrl + 0 (Numpad 0 in numpad-mode, top-row 0 in standard-mode).
+        // A bare 0 would fire whenever someone types a zero somewhere; Escape used to
+        // be the panic key but collides with games / menus / fullscreen apps.
+        // `CommandOrControl` resolves to Cmd on macOS and Ctrl on Win/Linux.
+        const panicKey = shortcutConfig.mode === 'numpad'
+            ? 'CommandOrControl+num0'
+            : 'CommandOrControl+0';
+        globalShortcut.register(panicKey, () => {
+            safeSendToRenderer('panic-stop');
         });
     } catch (err) { }
 };
@@ -530,11 +550,24 @@ const setupGlobalHooks = () => {
                     return;
                 }
 
-                // Panic Stop
-                if (e.keycode === UiohookKey.Escape) {
-                    console.log('[Shortcut] Panic Stop Triggered');
-                    mainWindow?.webContents.send('panic-stop');
-                    return;
+                // Panic Stop: Cmd/Ctrl + 0 (Numpad 0 in numpad-mode, top-row 0 in
+                // standard-mode). A pure `0` would fire whenever someone types a
+                // zero somewhere, so we require a modifier. Escape was the original
+                // key but collides with games/menus/fullscreen apps. Use
+                // isDestroyed()-safe sender to avoid the "Object has been destroyed"
+                // crash if the window is already gone.
+                const panicKeycode = shortcutConfig.mode === 'numpad'
+                    ? UiohookKey.Numpad0
+                    : UiohookKey['0'];
+                if (e.keycode === panicKeycode) {
+                    const hasCmdOrCtrl = [UiohookKey.Ctrl, UiohookKey.CtrlRight,
+                                          UiohookKey.Meta, UiohookKey.MetaRight]
+                        .some(k => pressedKeys.has(k));
+                    if (hasCmdOrCtrl) {
+                        console.log('[Shortcut] Panic Stop Triggered');
+                        safeSendToRenderer('panic-stop');
+                        return;
+                    }
                 }
 
                 // Normal Trigger Logic

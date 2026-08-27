@@ -10,6 +10,7 @@ import EffectEditor from './components/EffectEditor';
 import HelpModal from './components/HelpModal';
 import EasterEggModal from './components/EasterEggModal';
 import UpdateModal from './components/UpdateModal';
+import PanicStopButton from './components/PanicStopButton';
 import { AudioSetupWizard } from './components/AudioSetupWizard';
 import { useSoundboardStore } from './lib/store';
 import { audioController } from './lib/audioController';
@@ -58,6 +59,16 @@ const App: React.FC = () => {
     const toggleLibrary = useSoundboardStore((s) => s.toggleLibrary);
     const shortcutMode = useSoundboardStore((s) => s.shortcutMode);
     const setActivePage = useSoundboardStore((s) => s.setActivePage);
+
+    // Single source of truth for "stop everything": shared by the Cmd/Ctrl+0
+    // hotkey (delivered via the 'panic-stop' IPC event) and the on-screen
+    // panic button. Voice effects drop back to clean too — a panic should
+    // leave the user in a known, silent state.
+    const triggerPanicStop = useCallback(() => {
+        audioController.stopAll();
+        clearAllActive();
+        setActiveVoiceEffect(null);
+    }, [clearAllActive, setActiveVoiceEffect]);
 
     const windowWidth = useWindowWidth();
     const maxVisible = visiblePageCount(windowWidth);
@@ -198,10 +209,7 @@ const App: React.FC = () => {
         });
 
         const cleanupPanic = window.api.onPanicStop(() => {
-            audioController.stopAll();
-            clearAllActive();
-            // Panic also drops the voice back to clean.
-            setActiveVoiceEffect(null);
+            triggerPanicStop();
         });
 
         const cleanupTrigger = window.api.onTriggerSound(async (payload) => {
@@ -417,7 +425,7 @@ const App: React.FC = () => {
                                     onEditEffect={handleEditEffect}
                                 />
                                 <p className="text-[10px] text-surface-500 mt-4 select-none">
-                                    Right Click = Edit · Middle Click = Remove · ESC = Panic
+                                    Right Click = Edit · Middle Click = Remove · Ctrl + 0 = Panic
                                 </p>
                             </>
                         )
@@ -466,6 +474,8 @@ const App: React.FC = () => {
                     onClose={() => setUpdateOffer(null)}
                 />
             )}
+
+            {view === 'grid' && <PanicStopButton onPanic={triggerPanicStop} />}
         </div>
     );
 }

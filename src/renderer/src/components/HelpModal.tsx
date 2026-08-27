@@ -113,7 +113,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                             <li><strong>Click</strong> a cell: play the sound.</li>
                             <li><strong>Right-click</strong> a cell: edit the sound (volume, trim, fade in/out, one-shot/loop).</li>
                             <li><strong>Middle-click</strong> a cell: remove the sound from that slot.</li>
-                            <li><strong>Escape</strong>: panic — stop all sounds at once.</li>
+                            <li><strong>Cmd/Ctrl + 0</strong> (Numpad or top row), or the <strong>Stop all</strong> button (bottom-right): panic — stop all sounds at once.</li>
                             <li><strong>Global hotkeys</strong> work even when the app is minimized (Numpad or 1–9 modes, with per-page Ctrl/Alt/Shift modifiers). Assign per-page trigger keys via the key icon in the sidebar.</li>
                         </ul>
                     </Section>
