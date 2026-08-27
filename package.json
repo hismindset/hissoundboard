@@ -30,10 +30,10 @@
         "jimp": "^1.6.1",
         "qrcode": "^1.5.4",
         "uiohook-napi": "^1.5.5",
-        "uuid": "^14.0.1",
+        "uuid": "^14.0.2",
         "wavesurfer.js": "^7.12.11",
         "ws": "^8.21.3",
-        "zustand": "^5.0.14"
+        "zustand": "^5.0.15"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.3.3",
@@ -42,10 +42,10 @@
         "@types/node": "^25.9.5",
         "@types/qrcode": "^1.5.6",
         "@types/react": "^19.2.18",
-        "@types/react-dom": "^19.2.4",
+        "@types/react-dom": "^19.2.5",
         "@types/uuid": "^11.0.0",
         "@types/ws": "^8.18.1",
-        "@vitejs/plugin-react": "^6.0.5",
+        "@vitejs/plugin-react": "^6.1.0",
         "electron": "^42.9.0",
         "electron-builder": "^26.15.3",
         "png2icons": "^2.0.1",
@@ -56,7 +56,7 @@
         "tailwindcss": "^4.3.3",
         "tar": "^7.5.22",
         "typescript": "^6.0.3",
-        "vite": "^8.2.1"
+        "vite": "^8.2.2"
     },
     "overrides": {
         "tar": "^7.5.22",
