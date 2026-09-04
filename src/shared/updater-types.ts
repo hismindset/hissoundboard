@@ -4,6 +4,18 @@
 // the preload bridge, and the renderer's update modal. Keep this file free
 // of Electron imports so both sides can use it.
 
+/** One parsed release's notes, in chronological order (oldest first). The
+ *  modal renders the full list so a user upgrading across multiple versions
+ *  sees every release between their current and the offered one. */
+export interface ReleaseNotes {
+    /** Version string without leading "v", e.g. "1.5.0". */
+    version: string;
+    /** Plain-text body of the release's "## Summary" section, or null. */
+    summary: string | null;
+    /** Plain-text body of the release's "## Breaking Changes" section, or null. */
+    breakingNotes: string | null;
+}
+
 /** Sent from main → renderer when an update should be offered to the user. */
 export interface UpdateOffer {
     /** Version of the available update, e.g. "1.5.0" (no leading "v"). */
@@ -13,15 +25,28 @@ export interface UpdateOffer {
     /** True when the update's semver major is greater than the current one. */
     isMajor: boolean;
     /**
-     * Plain-markdown text of the release's "## Summary" section, or null if
-     * the release has none / fetching the release body failed.
+     * Plain-markdown text of the offered release's "## Summary" section, or
+     * null if the release has none / fetching the release body failed. Kept
+     * for backwards-compat — the modal now uses `intermediateReleases` for
+     * rendering, but this field still holds the *final* release's summary
+     * (the same as `intermediateReleases[last].summary`) for any callers
+     * that just want the headline notes.
      */
     summary: string | null;
     /**
-     * Plain-markdown text of the release's "## Breaking Changes" section
-     * (with or without a leading ⚠️ in the heading), or null if absent.
+     * Plain-markdown text of the offered release's "## Breaking Changes"
+     * section (with or without a leading ⚠️ in the heading), or null.
+     * Same compat note as `summary`.
      */
     breakingNotes: string | null;
+    /**
+     * All releases between `currentVersion` (exclusive) and `version`
+     * (inclusive), in ascending order. The modal renders them stacked so
+     * skipping multiple versions shows every change-set, not just the last.
+     * Empty if the offered version is the very next release and no GitHub
+     * fetch succeeded beyond the headline.
+     */
+    intermediateReleases: ReleaseNotes[];
     /**
      * True on Windows/Linux where electron-updater can download and install
      * in place. False on macOS (unsigned build) — there the modal offers
