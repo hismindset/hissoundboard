@@ -1,9 +1,53 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSoundboardStore } from '../lib/store';
+import { useSoundboardStore, useLayoutPrefs } from '../lib/store';
+import { LAYOUT_OPTIONS, type MultiPageLayoutMode } from '../lib/layoutPrefs';
 import { Page } from '../types/page';
 import ModifierSelect from './ModifierSelect';
 import { formatModifierKeys } from '../lib/utils';
 import logoUrl from '../assets/hismindset_white.png';
+
+/** Tiny preview of a layout mode — used both in the sidebar trigger button
+ *  and inside the menu so the user can see at a glance which arrangement
+ *  a given option represents. Each preview draws the first N tiles of the
+ *  arrangement as rounded squares; non-filled cells are drawn as outlines
+ *  so the menu reads the same way regardless of active mode. */
+const LayoutPreviewIcon: React.FC<{ mode: MultiPageLayoutMode; className?: string }> = ({ mode, className }) => {
+    // (cols, rows, cells-as-filled, optional dot pattern)
+    const config: Record<MultiPageLayoutMode, { cols: number; rows: number }> = {
+        single: { cols: 1, rows: 1 },
+        row: { cols: 3, rows: 1 },
+        rowcol: { cols: 2, rows: 2 },
+        all: { cols: 3, rows: 3 },
+    };
+    const { cols, rows } = config[mode];
+    return (
+        <svg className={className ?? 'w-3.5 h-3.5'} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            {Array.from({ length: rows * cols }).map((_, i) => {
+                const r = Math.floor(i / cols);
+                const c = i % cols;
+                const w = 16 / cols;
+                const h = 16 / rows;
+                const x = c * w + 0.5;
+                const y = r * h + 0.5;
+                const sw = w - 1;
+                const sh = h - 1;
+                return (
+                    <rect
+                        key={i}
+                        x={x}
+                        y={y}
+                        width={sw}
+                        height={sh}
+                        rx="1"
+                        stroke="currentColor"
+                        fill="currentColor"
+                        fillOpacity="0.25"
+                    />
+                );
+            })}
+        </svg>
+    );
+};
 
 const PageList: React.FC = () => {
     const pages = useSoundboardStore((s) => s.pages);
@@ -14,6 +58,31 @@ const PageList: React.FC = () => {
     const renamePage = useSoundboardStore((s) => s.renamePage);
     const setPageModifier = useSoundboardStore((s) => s.setPageModifier);
     const updatePageOrder = useSoundboardStore((s) => s.updatePageOrder);
+
+    // Layout-mode preference lives in a separate, local-only store so it
+    // doesn't follow the user across the sync folder to other devices.
+    const layoutMode = useLayoutPrefs((s) => s.multiPageLayoutMode);
+    const setMultiPageLayoutMode = useLayoutPrefs((s) => s.setMultiPageLayoutMode);
+    const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+    const layoutButtonRef = useRef<HTMLButtonElement>(null);
+    const layoutMenuRef = useRef<HTMLDivElement>(null);
+
+    // Close the layout menu on outside click so it doesn't get stuck open
+    // when the user picks a mode and then clicks somewhere else.
+    useEffect(() => {
+        if (!layoutMenuOpen) return;
+        const handler = (e: MouseEvent) => {
+            const t = e.target as Node;
+            if (
+                layoutMenuRef.current && !layoutMenuRef.current.contains(t) &&
+                layoutButtonRef.current && !layoutButtonRef.current.contains(t)
+            ) {
+                setLayoutMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [layoutMenuOpen]);
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
@@ -113,17 +182,70 @@ const PageList: React.FC = () => {
 
     return (
         <div className="w-64 bg-surface-900 border-r border-surface-800 flex flex-col h-full select-none">
-            <div className="p-4 border-b border-surface-800 flex items-center justify-between">
+            <div className="p-4 border-b border-surface-800 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-surface-400 uppercase tracking-wider">Pages</h2>
-                <button
-                    onClick={() => addPage()}
-                    className="p-1.5 rounded-md bg-surface-800 text-surface-400 hover:bg-accent hover:text-white transition-all"
-                    title="Add Page"
-                >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* Multi-page layout menu. Per-machine preference — see lib/layoutPrefs.ts.
+                        Each option shows a tiny preview of its tile arrangement. */}
+                    <div className="relative">
+                        <button
+                            ref={layoutButtonRef}
+                            onClick={() => setLayoutMenuOpen(o => !o)}
+                            className={`p-1.5 rounded-md transition-colors ${layoutMenuOpen ? 'bg-accent text-white' : 'bg-surface-800 text-surface-400 hover:bg-surface-700 hover:text-white'}`}
+                            title="Multi-page layout"
+                            aria-label="Multi-page layout"
+                            aria-haspopup="menu"
+                            aria-expanded={layoutMenuOpen}
+                        >
+                            <LayoutPreviewIcon mode={layoutMode} />
+                        </button>
+                        {layoutMenuOpen && (
+                            <div
+                                ref={layoutMenuRef}
+                                role="menu"
+                                className="absolute left-full top-0 ml-2 z-50 w-56 bg-surface-900 border border-surface-700 rounded-lg shadow-xl overflow-hidden"
+                            >
+                                {LAYOUT_OPTIONS.map((opt) => {
+                                    const active = opt.value === layoutMode;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            role="menuitemradio"
+                                            aria-checked={active}
+                                            onClick={() => {
+                                                setMultiPageLayoutMode(opt.value);
+                                                setLayoutMenuOpen(false);
+                                            }}
+                                            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${active ? 'bg-accent/15 text-white' : 'text-surface-300 hover:bg-surface-800 hover:text-white'}`}
+                                        >
+                                            <span className={`shrink-0 ${active ? 'text-accent-light' : 'text-surface-500'}`}>
+                                                <LayoutPreviewIcon mode={opt.value} />
+                                            </span>
+                                            <span className="flex-1 min-w-0">
+                                                <span className="block text-xs font-semibold">{opt.label}</span>
+                                                <span className="block text-[10px] text-surface-500 leading-tight">{opt.description}</span>
+                                            </span>
+                                            {active && (
+                                                <svg className="w-3.5 h-3.5 text-accent-light shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => addPage()}
+                        className="p-1.5 rounded-md bg-surface-800 text-surface-400 hover:bg-accent hover:text-white transition-all"
+                        title="Add Page"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">

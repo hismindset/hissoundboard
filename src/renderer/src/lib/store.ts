@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
+import { createLayoutPrefsStore, type MultiPageLayoutMode } from './layoutPrefs';
 import type { Sound, GridSlot } from '../types/sound';
 import type { Page } from '../types/page';
 import type { PersistedPayload } from '../../../shared/sync-types';
@@ -9,6 +10,11 @@ import type { PersistedPayload } from '../../../shared/sync-types';
 const slotKey = (pageId: string, slot: number) => `${pageId}-${slot}`;
 
 export type ShortcutMode = 'numpad' | 'standard';
+
+// Re-exported so callers (App.tsx, PageList.tsx) can read/write the multi-page
+// layout mode without importing from the separate layout-prefs store file.
+export type { MultiPageLayoutMode };
+export const useLayoutPrefs = createLayoutPrefsStore;
 
 // Re-exported from the shared module so the rest of the renderer (e.g.
 // audioController.ts) can keep importing `AudioSettings` from here — the

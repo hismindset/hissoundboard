@@ -12,10 +12,10 @@ import EasterEggModal from './components/EasterEggModal';
 import UpdateModal from './components/UpdateModal';
 import PanicStopButton from './components/PanicStopButton';
 import { AudioSetupWizard } from './components/AudioSetupWizard';
-import { useSoundboardStore } from './lib/store';
+import { useSoundboardStore, useLayoutPrefs } from './lib/store';
 import { audioController } from './lib/audioController';
 import { isEffectSlotId, getEffectPreset } from './lib/voiceEffects';
-import { useWindowWidth, visiblePageCount } from './lib/useWindowWidth';
+import { useWindowSize, visiblePageCount } from './lib/useWindowWidth';
 import wordmark from './assets/his_soundboard_logo.png';
 
 type View = 'grid' | 'settings';
@@ -70,34 +70,77 @@ const App: React.FC = () => {
         setActiveVoiceEffect(null);
     }, [clearAllActive, setActiveVoiceEffect]);
 
-    const windowWidth = useWindowWidth();
-    const maxVisible = visiblePageCount(windowWidth);
+    const { width: windowWidth, height: windowHeight } = useWindowSize();
+    const columns = visiblePageCount(windowWidth);
+    const layoutMode = useLayoutPrefs((s) => s.multiPageLayoutMode);
+    // Pick the row count so that `rows × (tile height + inter-row gap) +
+    // outer padding` actually fits in the window — otherwise a partial
+    // bottom row spills out of the container and gets clipped (which the
+    // user described as "eine abgeschnittene Seite ist noch zu sehen").
+    // A page tile is ~500 px tall (PageHeader ~50 + 3-row 3×3 grid ~420 +
+    // tile internal padding). Outer padding is px-6 → 48 px, inter-row
+    // gap is gap-8 → 32 px.
+    const TILE_HEIGHT_PX = 500;
+    const OUTER_PAD_PX = 48;
+    const ROW_GAP_PX = 32;
+    // rows that physically fit in the current window, capped at 3.
+    const maxRowsThatFit = Math.min(
+        3,
+        Math.max(1, Math.floor((windowHeight - OUTER_PAD_PX + ROW_GAP_PX) / (TILE_HEIGHT_PX + ROW_GAP_PX)))
+    );
+    // `single` always uses 1 row. `row` and `rowcol` step up by available
+    // height; `all` always uses whatever fits so the no-scroll constraint
+    // of rowcol isn't violated accidentally when fewer rows would also do.
+    const rows: 1 | 2 | 3 =
+        layoutMode === 'all' ? (maxRowsThatFit as 1 | 2 | 3) :
+        maxRowsThatFit as 1 | 2 | 3;
+    // `single` collapses to 1 slot regardless of window size. `row` keeps
+    // exactly one row. `rowcol` uses rows × cols and is non-scrolling (the
+    // user said "kein Scrollen" — pages that don't fit are simply hidden).
+    // `all` renders every page; the outer container scrolls.
+    const totalSlots =
+        layoutMode === 'single' ? 1 :
+        layoutMode === 'row' ? columns :
+        layoutMode === 'rowcol' ? columns * rows :
+        /* all */ Math.max(columns, pages?.length ?? 0);
+    // `showMultiPage` decides whether we render the multi-page view at all;
+    // `single` mode (and only 1 page on screen) always uses the single-page layout.
+    const isMultiPageMode = layoutMode !== 'single';
 
     // Pick the slice of pages to show in the multi-page view. The currently
-    // active page is always the leftmost (primary) slot, followed by as many
+    // active page is always the first (primary) slot, followed by as many
     // subsequent pages as fit on screen. If the active page is near the end
     // and we don't have enough pages after it, we slide the window back so
-    // the user still sees the requested number of pages side-by-side. With
-    // only one page (or below the first breakpoint) the rightmost slots stay
-    // empty and we render the single-page layout instead.
+    // the user still sees the requested number of pages (rows × cols) — the
+    // active page stays in slot 0 of the active row, the trailing slots just
+    // show fewer pages. With only one page (or below the first width
+    // breakpoint) the rightmost slots stay empty and we render the single-
+    // page layout instead.
     const visiblePageIds = useMemo<(string | null)[]>(() => {
-        const slots: (string | null)[] = [null, null, null];
-        if (!pages || pages.length === 0 || maxVisible === 1) return slots;
+        if (!pages || pages.length === 0) return [];
+        if (layoutMode === 'all') return pages.map(p => p.id);
+        const slots: (string | null)[] = Array(totalSlots).fill(null);
+        if (columns === 1) {
+            // Narrow window: only the active page, no slide-back.
+            const activeIdx = pages.findIndex(p => p.id === activePageId);
+            slots[0] = pages[activeIdx >= 0 ? activeIdx : 0].id;
+            return slots;
+        }
         const activeIdx = pages.findIndex(p => p.id === activePageId);
         const startIdx = activeIdx < 0 ? 0 : activeIdx;
         // Slide back if we don't have enough pages after the active one to
         // fill the requested slot count.
-        const overflow = startIdx + maxVisible - pages.length;
+        const overflow = startIdx + totalSlots - pages.length;
         const firstIdx = overflow > 0 ? Math.max(0, startIdx - overflow) : startIdx;
-        for (let i = 0; i < maxVisible; i++) {
+        for (let i = 0; i < totalSlots; i++) {
             const p = pages[firstIdx + i];
             slots[i] = p ? p.id : null;
         }
         return slots;
-    }, [pages, activePageId, maxVisible]);
+    }, [pages, activePageId, columns, totalSlots, layoutMode]);
 
     const visiblePages = visiblePageIds.filter((id): id is string => !!id);
-    const showMultiPage = visiblePages.length > 1;
+    const showMultiPage = isMultiPageMode && visiblePages.length > 1;
 
     // Init Audio Controller with saved settings.
     // IMPORTANT: this runs the full init (including microphone passthrough) on
@@ -393,15 +436,21 @@ const App: React.FC = () => {
             <div className="flex-1 flex overflow-hidden">
                 {view === 'grid' && <PageList />}
 
-                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' && !showMultiPage ? 'items-center justify-center' : view === 'grid' ? 'items-stretch justify-start px-6 py-6 overflow-auto' : 'items-start pt-4 px-6 pb-6 overflow-auto'}`}>
+                <div className={`flex-1 flex flex-col bg-surface-950 relative ${view === 'grid' && !showMultiPage ? 'items-center justify-center' : view === 'grid' ? `items-stretch justify-start px-6 py-6 ${layoutMode === 'all' ? 'overflow-auto' : 'overflow-hidden'}` : 'items-start pt-4 px-6 pb-6 overflow-auto'}`}>
                     {view === 'grid' ? (
                         showMultiPage ? (
-                            <div className="flex-1 flex flex-row items-start justify-center gap-8 min-h-0">
+                            <div
+                                className={`grid items-start justify-center gap-8 min-h-0 content-start ${layoutMode === 'all' ? 'mb-6' : 'flex-1'}`}
+                                style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 480px))` }}
+                            >
                                 {visiblePages.map((pageId, idx) => {
                                     const page = pages?.find(p => p.id === pageId);
                                     if (!page) return null;
                                     return (
-                                        <div key={pageId} className="flex flex-col gap-3 w-full max-w-[480px]">
+                                        <div
+                                            key={pageId}
+                                            className="flex flex-col gap-3 w-full"
+                                        >
                                             <PageHeader
                                                 page={page}
                                                 isActive={pageId === activePageId}
