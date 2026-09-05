@@ -2,7 +2,7 @@ import { app, ipcMain, BrowserWindow, net, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
-import type { UpdateOffer, UpdateState } from '../shared/updater-types';
+import type { UpdateOffer, UpdateState, ReleaseNotes } from '../shared/updater-types';
 import { UPDATER_CHANNELS as CHANNELS } from '../shared/updater-types';
 
 // ─── updater ──────────────────────────────────────────────────────────────
@@ -116,6 +116,52 @@ const fetchReleaseNotes = async (version: string): Promise<{ summary: string | n
 };
 
 /**
+ * Fetch every release between `currentVersion` (exclusive) and `latestVersion`
+ * (inclusive), parse each one, and return them in ascending semver order.
+ *
+ * Rationale: a user skipping several minor versions should see the full
+ * change history in the update modal, not just the latest release's notes.
+ * Releases that fail to fetch are silently dropped — a single 404 on an
+ * intermediate release should not break the whole offer.
+ *
+ * The function is bounded by GitHub's per-page limit (100). If more than 100
+ * releases exist between the two versions we'd only get the first page; in
+ * practice this app ships a release per merge to main so we're nowhere near
+ * that, but the cap is worth a comment.
+ */
+const fetchIntermediateReleases = async (currentVersion: string, latestVersion: string): Promise<ReleaseNotes[]> => {
+    try {
+        // List the 100 most recent releases (newest first). We can't filter on
+        // the server because the per-page API doesn't take a date range.
+        const response = await net.fetch('https://api.github.com/repos/hismindset/hissoundboard/releases?per_page=100');
+        if (!response.ok) {
+            console.error(`[Updater] Failed to list releases (HTTP ${response.status})`);
+            return [];
+        }
+        const releases = (await response.json()) as Array<{ tag_name: string; body: string }>;
+
+        // Filter to versions strictly above `currentVersion` and at or below
+        // `latestVersion`. `tag_name` is "vX.Y.Z"; we strip the prefix.
+        const inRange = releases
+            .map(r => ({ version: r.tag_name.replace(/^v/, ''), body: r.body }))
+            .filter(r => compareSemver(r.version, currentVersion) > 0 && compareSemver(r.version, latestVersion) <= 0);
+
+        // Parse each, then sort ascending so the modal reads top-to-bottom
+        // in chronological order (oldest skipped release first, latest at the
+        // bottom — the version the user is about to install).
+        const parsed = inRange.map<ReleaseNotes>((r) => {
+            const { summary, breakingNotes } = extractReleaseNotes(r.body);
+            return { version: r.version, summary, breakingNotes };
+        });
+        parsed.sort((a, b) => compareSemver(a.version, b.version));
+        return parsed;
+    } catch (err) {
+        console.error('[Updater] Failed to fetch intermediate releases:', err);
+        return [];
+    }
+};
+
+/**
  * Compare two semantic version strings (e.g., "1.2.3" vs "1.2.4").
  * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
  */
@@ -190,8 +236,13 @@ const checkForUpdatesWindows = async (getMainWindow: () => BrowserWindow | null,
             return 'none';
         }
 
-        // Fetch detailed release notes
-        const { summary, breakingNotes } = await fetchReleaseNotes(updateVersion);
+        // Fetch detailed release notes for the headline release AND every
+        // version in between — the modal stacks them so a multi-version
+        // upgrade shows the full change history, not just the last.
+        const [{ summary, breakingNotes }, intermediateReleases] = await Promise.all([
+            fetchReleaseNotes(updateVersion),
+            fetchIntermediateReleases(app.getVersion(), updateVersion),
+        ]);
 
         const offer: UpdateOffer = {
             version: updateVersion,
@@ -199,6 +250,7 @@ const checkForUpdatesWindows = async (getMainWindow: () => BrowserWindow | null,
             isMajor: getMajorVersion(updateVersion) > getMajorVersion(app.getVersion()),
             summary,
             breakingNotes,
+            intermediateReleases,
             canAutoInstall: true,
             releaseUrl: `https://github.com/hismindset/hissoundboard/releases/tag/v${updateVersion}`,
             manual,
@@ -239,6 +291,9 @@ const checkForUpdatesMacOS = async (getMainWindow: () => BrowserWindow | null, m
         }
 
         const { summary, breakingNotes } = extractReleaseNotes(release.body);
+        // Pull every release between the running version and the offered one
+        // so a multi-version upgrade shows the full change history.
+        const intermediateReleases = await fetchIntermediateReleases(app.getVersion(), updateVersion);
 
         const offer: UpdateOffer = {
             version: updateVersion,
@@ -246,6 +301,7 @@ const checkForUpdatesMacOS = async (getMainWindow: () => BrowserWindow | null, m
             isMajor: getMajorVersion(updateVersion) > getMajorVersion(app.getVersion()),
             summary,
             breakingNotes,
+            intermediateReleases,
             canAutoInstall: false, // macOS: unsigned, must download manually
             releaseUrl: release.html_url,
             manual,
